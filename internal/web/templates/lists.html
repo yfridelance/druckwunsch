@@ -1,0 +1,27 @@
+{{define "content"}}
+<div class="hero">
+  <div>
+    <div class="eyebrow">// Sammlungen</div>
+    <h1>Listen</h1>
+    <p>Eigene Listen anlegen und mit anderen teilen.</p>
+  </div>
+  <form method="post" action="/lists" class="inline-form" style="min-width:min(420px,100%)">
+    <input name="name" placeholder="Neue Liste, z.B. „Weihnachtsgeschenke“" required>
+    <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg>Erstellen</button>
+  </form>
+</div>
+<table class="table">
+  <thead><tr><th>Name</th><th>Besitzer</th><th>Rolle</th><th>Einträge</th><th></th></tr></thead>
+  <tbody>
+  {{range .Data}}
+    <tr>
+      <td><a class="listname" href="/?list={{.ID}}&status="><span class="dot"></span>{{.Name}}{{if .IsInbox}} <span class="chip">Inbox</span>{{end}}</a></td>
+      <td class="muted">{{.OwnerName}}</td>
+      <td><span class="role {{.Role}}">{{if eq .Role "owner"}}BESITZER{{else if eq .Role "editor"}}BEARBEITEN{{else}}LESEN{{end}}</span></td>
+      <td class="num">{{.ItemCount}}</td>
+      <td><a href="/lists/{{.ID}}" class="btn sm"><svg class="ic"><use href="#i-share"/></svg>{{if eq .Role "owner"}}Teilen &amp; Verwalten{{else}}Details{{end}}</a></td>
+    </tr>
+  {{end}}
+  </tbody>
+</table>
+{{end}}

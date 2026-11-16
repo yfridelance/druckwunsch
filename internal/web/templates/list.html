@@ -1,0 +1,72 @@
+{{define "content"}}{{with .Data}}{{$l := .List}}
+<div class="narrow">
+  <a href="/lists" class="back"><svg class="ic"><use href="#i-left"/></svg>Alle Listen</a>
+  <div class="eyebrow">// Liste</div>
+  <h1>{{$l.Name}}</h1>
+  <p class="muted" style="margin-bottom:1.5rem">Besitzer: {{$l.OwnerName}} · <a href="/?list={{$l.ID}}&status=">{{$l.ItemCount}} Einträge anzeigen</a></p>
+
+  {{if eq $l.Role "owner"}}
+  <div class="panel">
+    <h3><svg class="ic"><use href="#i-share"/></svg>Geteilt mit</h3>
+    {{if .Members}}
+    <table class="table">
+      <tbody>
+      {{range .Members}}
+        <tr>
+          <td><span class="listname"><span class="avatar" style="width:26px;height:26px;font-size:.75rem">{{initial .User.DisplayName}}</span>{{.User.DisplayName}}</span></td>
+          <td>
+            <form method="post" action="/lists/{{$l.ID}}/share" class="inline">
+              <input type="hidden" name="user" value="{{.User.ID}}">
+              <select name="role" data-autosubmit style="width:auto">
+                <option value="viewer" {{if eq .Role "viewer"}}selected{{end}}>Lesen</option>
+                <option value="editor" {{if eq .Role "editor"}}selected{{end}}>Bearbeiten</option>
+              </select>
+            </form>
+          </td>
+          <td>
+            <form method="post" action="/lists/{{$l.ID}}/unshare" class="inline">
+              <input type="hidden" name="user" value="{{.User.ID}}">
+              <button class="btn sm danger" aria-label="Entfernen"><svg class="ic"><use href="#i-trash"/></svg></button>
+            </form>
+          </td>
+        </tr>
+      {{end}}
+      </tbody>
+    </table>
+    {{else}}<p class="muted">Noch mit niemandem geteilt.</p>{{end}}
+
+    {{if .Users}}
+    <form method="post" action="/lists/{{$l.ID}}/share" class="inline-form" style="margin-top:.75rem">
+      <select name="user">{{range .Users}}<option value="{{.ID}}">{{.DisplayName}}</option>{{end}}</select>
+      <select name="role" style="flex:0 1 150px"><option value="editor">Bearbeiten</option><option value="viewer">Lesen</option></select>
+      <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg>Teilen</button>
+    </form>
+    {{else}}<p><small>Weitere Personen erscheinen hier, sobald sie sich einmal angemeldet haben.</small></p>{{end}}
+  </div>
+
+  <div class="panel">
+    <h3><svg class="ic"><use href="#i-edit"/></svg>Umbenennen</h3>
+    <form method="post" action="/lists/{{$l.ID}}/rename" class="inline-form">
+      <input name="name" value="{{$l.Name}}" required>
+      <button class="btn">Speichern</button>
+    </form>
+  </div>
+
+  {{if not $l.IsInbox}}
+  <div class="panel" style="border-color:rgba(255,77,94,.3)">
+    <form method="post" action="/lists/{{$l.ID}}/delete" data-confirm="Liste mit allen Einträgen löschen?">
+      <button class="btn danger"><svg class="ic"><use href="#i-trash"/></svg>Liste löschen</button>
+    </form>
+  </div>
+  {{end}}
+  {{else}}
+  <div class="panel">
+    <p>Diese Liste wurde mit dir geteilt: <span class="role {{$l.Role}}">{{if eq $l.Role "editor"}}BEARBEITEN{{else}}NUR LESEN{{end}}</span></p>
+    <form method="post" action="/lists/{{$l.ID}}/unshare">
+      <input type="hidden" name="user" value="{{$.User.ID}}">
+      <button class="btn danger sm"><svg class="ic"><use href="#i-logout"/></svg>Liste verlassen</button>
+    </form>
+  </div>
+  {{end}}
+</div>
+{{end}}{{end}}

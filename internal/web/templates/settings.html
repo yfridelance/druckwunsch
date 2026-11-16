@@ -1,0 +1,65 @@
+{{define "content"}}{{with .Data}}
+<div class="hero">
+  <div>
+    <div class="eyebrow">// Werkzeugkiste</div>
+    <h1>Einstellungen</h1>
+    <p>Lesezeichen, Handy-Teilen und Labels.</p>
+  </div>
+</div>
+
+<div class="settings-grid">
+  <div class="panel wide">
+    <h3><svg class="ic"><use href="#i-bookmark"/></svg>Lesezeichen „→ Druckwunsch“</h3>
+    <div class="bookmarklet-drop">
+      <a class="btn primary big bookmarklet" href="{{jsURL .Bookmarklet}}" data-bookmarklet><svg class="ic"><use href="#i-cube"/></svg>→ Druckwunsch</a>
+      <span class="muted">⟵ in die Lesezeichenleiste ziehen</span>
+    </div>
+    <ol class="steps">
+      <li>Modellseite öffnen (MakerWorld, Printables, Thingiverse …).</li>
+      <li>Lesezeichen klicken. Titel, Bilder, Designer und bei MakerWorld <strong>alle Druckprofile</strong> werden übernommen.</li>
+      <li>Liste und „Wunsch von“ wählen, fertig. Bist du schon auf einem Profil (<code>#profileId-…</code>), ist es vorausgewählt.</li>
+    </ol>
+    <details class="more">
+      <summary>Lesezeichen von Hand anlegen (Safari, Handy)</summary>
+      <p class="muted">Neues Lesezeichen anlegen und als Adresse einfügen:</p>
+      <textarea readonly rows="4" class="mono" data-select>{{.Bookmarklet}}</textarea>
+    </details>
+  </div>
+
+  <div class="panel">
+    <h3><svg class="ic"><use href="#i-phone"/></svg>Android</h3>
+    <ol class="steps">
+      <li>Druckwunsch in Chrome öffnen.</li>
+      <li>Menü → „App installieren“.</li>
+      <li>In MakerWorld &amp; Co. auf „Teilen“ → <strong>Druckwunsch</strong>.</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h3><svg class="ic"><use href="#i-phone"/></svg>iPhone / iPad</h3>
+    <ol class="steps">
+      <li>Kurzbefehle-App → neuer Kurzbefehl, „Im Share-Sheet anzeigen“ (URLs, Text).</li>
+      <li>Aktion „URL“: <code>{{.ShareURL}}</code> + <em>Kurzbefehleingabe</em> (URL-codiert).</li>
+      <li>Aktion „URLs öffnen“.</li>
+    </ol>
+  </div>
+
+  <div class="panel wide" id="labels">
+    <h3><svg class="ic"><use href="#i-tag"/></svg>Labels</h3>
+    <p class="muted">Gelten für alle, z.B. „Geschenk“, „Ersatzteil“, „Multicolor“, „AMS“.</p>
+    <ul class="label-list">
+      {{range .Labels}}
+      <li>
+        <span class="label" style="--c: {{safeColor .Color}}">{{.Name}}</span>
+        <form method="post" action="/labels/{{.ID}}/delete" class="inline" data-confirm="Label „{{.Name}}“ löschen?"><button class="x" aria-label="Löschen">✕</button></form>
+      </li>
+      {{else}}<li class="muted" style="border:0;background:none">Noch keine Labels.</li>{{end}}
+    </ul>
+    <form method="post" action="/labels" class="inline-form">
+      <input name="name" placeholder="Neues Label" required maxlength="50">
+      <input type="color" name="color" value="#19e3c4" aria-label="Farbe" style="flex:0 0 56px">
+      <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg>Anlegen</button>
+    </form>
+  </div>
+</div>
+{{end}}{{end}}

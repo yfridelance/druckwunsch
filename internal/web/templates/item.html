@@ -1,0 +1,189 @@
+{{define "content"}}{{with .Data}}{{$it := .Item}}{{$m := .Model}}{{$cur := step $it.Status}}
+<a href="/" class="back"><svg class="ic"><use href="#i-left"/></svg>Zur Übersicht</a>
+
+<div class="item-hero status-{{$it.Status}}">
+  {{if $m.CoverImage}}<img class="backdrop" src="{{$m.CoverImage}}" alt="" referrerpolicy="no-referrer">{{end}}
+  <div class="gallery">
+    <div class="main">
+      {{if $m.CoverImage}}<img id="main-img" src="{{$m.CoverImage}}" alt="" referrerpolicy="no-referrer">{{else}}<div class="noimg"><svg class="ic"><use href="#i-cube"/></svg></div>{{end}}
+    </div>
+    {{if gt (len $m.Images) 1}}
+    <div class="thumbs">{{range $i, $src := $m.Images}}<img src="{{$src}}" alt="" loading="lazy" data-full="{{$src}}" class="{{if eq $i 0}}sel{{end}}" referrerpolicy="no-referrer">{{end}}</div>
+    {{end}}
+  </div>
+
+  <div class="item-info">
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.6rem">
+      <span class="chip">{{platformName $m.Platform}}</span>
+      <span class="pill">{{$it.StatusLabel}}</span>
+      {{if gt $it.Quantity 1}}<span class="chip ok">{{$it.Quantity}} Stück</span>{{end}}
+    </div>
+    <h1>{{$it.Title}}</h1>
+    <div class="by">
+      {{if $m.Designer}}<span><svg class="ic"><use href="#i-user"/></svg>{{if $m.DesignerURL}}<a href="{{$m.DesignerURL}}" target="_blank" rel="noopener">{{$m.Designer}}</a>{{else}}{{$m.Designer}}{{end}}</span>{{end}}
+      {{if $m.License}}<span><svg class="ic"><use href="#i-tag"/></svg>{{$m.License}}</span>{{end}}
+      {{if $m.Profiles}}<span><svg class="ic"><use href="#i-layers"/></svg>{{len $m.Profiles}} Profile</span>{{end}}
+    </div>
+
+    <div class="actions">
+      {{if .Chosen}}<a class="btn primary" href="{{.Chosen.URL}}" target="_blank" rel="noopener"><svg class="ic"><use href="#i-printer"/></svg>Gewähltes Profil öffnen</a>{{end}}
+      <a class="btn {{if not .Chosen}}primary{{end}}" href="{{$m.URL}}" target="_blank" rel="noopener"><svg class="ic"><use href="#i-ext"/></svg>Auf {{platformName $m.Platform}}</a>
+    </div>
+    {{if eq $m.Platform "makerworld"}}<p><small>Auf MakerWorld „In Bambu Studio öffnen“ wählen. Das Profil ist über den Link schon ausgewählt.</small></p>{{end}}
+
+    {{if not $m.HasMetadata}}
+    <div class="notice"><svg class="ic"><use href="#i-alert"/></svg><div>
+      <p><strong>Noch keine Bilder &amp; Profile.</strong> Öffne die <a href="{{$m.URL}}" target="_blank" rel="noopener">Modellseite</a> und klick dort das Lesezeichen <a href="/settings">„→ Druckwunsch“</a>.</p>
+      <div class="inline-form">
+        {{if ne $m.Platform "makerworld"}}<form method="post" action="/items/{{$it.ID}}/refresh" class="inline"><button class="btn sm"><svg class="ic"><use href="#i-refresh"/></svg>Automatisch versuchen</button></form>{{end}}
+        {{if $it.CanEdit}}<form method="post" action="/items/{{$it.ID}}/title" class="inline-form" style="flex:1"><input name="title" placeholder="Titel von Hand setzen"><button class="btn sm">Speichern</button></form>{{end}}
+      </div>
+    </div></div>
+    {{end}}
+
+    <div class="eyebrow" style="margin-top:.4rem">Status</div>
+    {{if $it.CanEdit}}
+    <form method="post" action="/items/{{$it.ID}}/status">
+      <div class="stepper">
+        {{range $i, $s := workflow}}
+        <button name="status" value="{{$s.Key}}" class="step st-{{$s.Key}} {{if eq $i $cur}}cur{{else if lt $i $cur}}done{{end}}"><span class="bar"></span>{{$s.Label}}</button>
+        {{end}}
+      </div>
+      <div class="step-alt"><button name="status" value="verworfen" class="btn sm ghost {{if eq $it.Status "verworfen"}}cur{{end}}"><svg class="ic"><use href="#i-trash"/></svg>Verwerfen</button></div>
+    </form>
+    {{else}}
+    <div class="layers" style="height:12px;margin-bottom:1rem">{{range seq 4}}<span class="{{layer . $it.Status}}"></span>{{end}}</div>
+    {{end}}
+
+    <div class="eyebrow">Labels</div>
+    {{if $it.CanEdit}}
+      {{if .Labels}}
+      <form method="post" action="/items/{{$it.ID}}/labels" class="label-picker" data-autosave>
+        {{range .Labels}}<label class="label" style="--c: {{safeColor .Color}}"><input type="checkbox" name="label" value="{{.ID}}" {{if hasLabel .ID $it.Labels}}checked{{end}}>{{.Name}}</label>{{end}}
+        <noscript><button class="btn sm">Speichern</button></noscript>
+      </form>
+      {{else}}<p><small>Noch keine Labels. In den <a href="/settings#labels">Einstellungen</a> anlegen.</small></p>{{end}}
+    {{else}}<div>{{range $it.Labels}}<span class="label" style="--c: {{safeColor .Color}}">{{.Name}}</span>{{else}}<small>keine</small>{{end}}</div>{{end}}
+  </div>
+</div>
+
+<div class="item-grid">
+  <div>
+    {{if $m.Profiles}}
+    <h2 class="section-title" id="profile"><svg class="ic"><use href="#i-layers"/></svg>Druckprofile <span class="count">{{len $m.Profiles}}</span></h2>
+    <div class="profiles">
+    {{range $m.Profiles}}
+      <article class="profile {{if isChosen .ID $it.ChosenProfileID}}chosen{{end}}">
+        {{if .CoverImage}}<img class="thumb" src="{{.CoverImage}}" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<div class="thumb" style="display:grid;place-items:center;color:var(--dim)"><svg class="ic" style="width:32px;height:32px"><use href="#i-layers"/></svg></div>{{end}}
+        <div style="min-width:0">
+          <h4>{{.Name}}</h4>
+          {{if .Printer}}<div class="printer">{{.Printer}}</div>{{end}}
+          <div class="specs">
+            <span class="spec"><svg class="ic"><use href="#i-clock"/></svg>{{duration .PrintTimeSec}}</span>
+            <span class="spec"><svg class="ic"><use href="#i-spool"/></svg>{{grams .FilamentG}}</span>
+            {{if .PlateCount}}<span class="spec"><svg class="ic"><use href="#i-layers"/></svg>{{.PlateCount}} Platte{{if gt .PlateCount 1}}n{{end}}</span>{{end}}
+            {{if .Nozzle}}<span class="spec"><svg class="ic"><use href="#i-nozzle"/></svg>{{.Nozzle}}</span>{{end}}
+          </div>
+          {{if .Materials}}<div class="materials">{{range .Materials}}<span><i class="swatch" style="--c: {{safeColor .Color}}"></i>{{.Type}}{{if .Grams}} · {{grams .Grams}}{{end}}</span>{{end}}</div>{{end}}
+          <div class="acts">
+            {{if $it.CanEdit}}
+            <form method="post" action="/items/{{$it.ID}}/profile" class="inline">
+              {{if isChosen .ID $it.ChosenProfileID}}<button name="profile" value="0" class="btn sm ghost">Abwählen</button>
+              {{else}}<button name="profile" value="{{.ID}}" class="btn sm teal"><svg class="ic"><use href="#i-check"/></svg>Dieses drucken</button>{{end}}
+            </form>
+            {{end}}
+            {{if .URL}}<a href="{{.URL}}" target="_blank" rel="noopener" class="btn sm"><svg class="ic"><use href="#i-ext"/></svg>Öffnen</a>{{end}}
+          </div>
+        </div>
+      </article>
+    {{end}}
+    </div>
+    {{end}}
+
+    {{if $m.Description}}
+    <div class="panel" style="margin-top:1.25rem">
+      <details class="more"><summary>Beschreibung des Designers</summary><div class="desc pre">{{$m.Description}}</div></details>
+    </div>
+    {{end}}
+
+    <h2 class="section-title" id="comments"><svg class="ic"><use href="#i-chat"/></svg>Verlauf</h2>
+    <div class="panel">
+      <ul class="timeline">
+        {{range .Comments}}<li class="{{if .IsSystem}}system{{end}}"><div class="when">{{date .CreatedAt}} · {{.Author}}</div>{{.Text}}</li>
+        {{else}}<li class="system"><div class="when">jetzt</div>Noch keine Einträge.</li>{{end}}
+      </ul>
+      <form method="post" action="/items/{{$it.ID}}/comment" class="inline-form">
+        <input name="text" placeholder="Kommentar, z.B. „Bitte in Dunkelblau“" required>
+        <button class="btn primary sm"><svg class="ic"><use href="#i-right"/></svg>Senden</button>
+      </form>
+    </div>
+  </div>
+
+  <aside>
+    <div class="panel">
+      <h3><svg class="ic"><use href="#i-gift"/></svg>Der Wunsch</h3>
+      {{if $it.CanEdit}}
+      <form method="post" action="/items/{{$it.ID}}/edit">
+        <label>Wunsch von <input name="requested_by" value="{{$it.RequestedBy}}" placeholder="z.B. Anna"></label>
+        <div class="row">
+          <label>Anzahl <input type="number" min="1" name="quantity" value="{{$it.Quantity}}"></label>
+          <label>Priorität
+            <select name="priority">
+              <option value="-1" {{if eq $it.Priority -1}}selected{{end}}>Niedrig</option>
+              <option value="0" {{if eq $it.Priority 0}}selected{{end}}>Normal</option>
+              <option value="1" {{if eq $it.Priority 1}}selected{{end}}>Hoch</option>
+              <option value="2" {{if eq $it.Priority 2}}selected{{end}}>Dringend</option>
+            </select>
+          </label>
+        </div>
+        <label>Farbe / Material <input name="color" value="{{$it.Color}}" placeholder="z.B. PLA Matt Schwarz"></label>
+        <label>Notiz <textarea name="note" rows="3">{{$it.Note}}</textarea></label>
+        <button class="btn" style="width:100%"><svg class="ic"><use href="#i-check"/></svg>Speichern</button>
+      </form>
+      {{else}}
+      <div class="facts">
+        <div class="fact"><div class="k">Für</div><div class="v">{{or $it.RequestedBy "–"}}</div></div>
+        <div class="fact"><div class="k">Anzahl</div><div class="v">{{$it.Quantity}}</div></div>
+        <div class="fact"><div class="k">Farbe</div><div class="v">{{or $it.Color "–"}}</div></div>
+      </div>
+      {{if $it.Note}}<p class="pre">{{$it.Note}}</p>{{end}}
+      {{end}}
+    </div>
+
+    <div class="panel">
+      <div class="facts" style="margin:0">
+        <div class="fact"><div class="k">Liste</div><div class="v"><a href="/?list={{$it.ListID}}&status=">{{$it.ListName}}</a></div></div>
+        <div class="fact"><div class="k">Erfasst</div><div class="v">{{$it.AddedBy}}</div></div>
+        <div class="fact"><div class="k">Am</div><div class="v mono">{{date $it.CreatedAt}}</div></div>
+        {{if $it.PrintedAt}}<div class="fact"><div class="k">Gedruckt</div><div class="v mono">{{date $it.PrintedAt}}</div></div>{{end}}
+      </div>
+      {{if .Others}}
+      <div class="eyebrow" style="margin-top:1rem">Auch gewünscht in</div>
+      {{range .Others}}<p style="margin:.2rem 0"><a href="/items/{{.ID}}">{{.ListName}}</a> <span class="pill status-{{.Status}}">{{.StatusLabel}}</span>{{if .RequestedBy}} <small>für {{.RequestedBy}}</small>{{end}}</p>{{end}}
+      {{end}}
+    </div>
+
+    {{if .Lists}}
+    <div class="panel">
+      <details class="more">
+        <summary>Verschieben, kopieren, löschen</summary>
+        <form method="post" action="/items/{{$it.ID}}/move">
+          <label>Ziel-Liste
+            <select name="list">{{range .Lists}}{{if ne .ID $it.ListID}}<option value="{{.ID}}">{{.Name}}{{if ne .Role "owner"}} · {{.OwnerName}}{{end}}</option>{{end}}{{end}}</select>
+          </label>
+          <div class="inline-form">
+            {{if $it.CanEdit}}<button name="copy" value="0" class="btn sm"><svg class="ic"><use href="#i-right"/></svg>Verschieben</button>{{end}}
+            <button name="copy" value="1" class="btn sm"><svg class="ic"><use href="#i-copy"/></svg>Kopieren</button>
+          </div>
+        </form>
+        {{if $it.CanEdit}}
+        <form method="post" action="/items/{{$it.ID}}/delete" data-confirm="Eintrag wirklich löschen?" style="margin-top:1rem">
+          <button class="btn sm danger"><svg class="ic"><use href="#i-trash"/></svg>Eintrag löschen</button>
+        </form>
+        {{end}}
+      </details>
+    </div>
+    {{end}}
+  </aside>
+</div>
+{{end}}{{end}}

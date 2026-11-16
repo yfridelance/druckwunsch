@@ -1,0 +1,53 @@
+{{define "content"}}{{with .Data}}{{$m := .Model}}
+<div class="narrow">
+  <div class="eyebrow">// Vom Lesezeichen empfangen</div>
+  <h1 style="margin-bottom:1.25rem">Übernehmen</h1>
+  {{if .Warning}}<div class="notice"><svg class="ic"><use href="#i-alert"/></svg><p>{{.Warning}}</p></div>{{end}}
+  <div class="ingest-preview">
+    {{if $m.CoverImage}}<img src="{{$m.CoverImage}}" alt="" referrerpolicy="no-referrer">{{end}}
+    <div style="min-width:0">
+      <h3>{{if $m.Title}}{{$m.Title}}{{else}}{{$m.URL}}{{end}}</h3>
+      <div style="display:flex;gap:.4rem;flex-wrap:wrap">
+        <span class="chip">{{platformName $m.Platform}}</span>
+        {{if $m.Designer}}<span class="chip">{{$m.Designer}}</span>{{end}}
+        {{if $m.Profiles}}<span class="chip ok">{{len $m.Profiles}} Profile</span>{{end}}
+      </div>
+    </div>
+  </div>
+
+  {{if .Existing}}
+  <div class="notice"><svg class="ic"><use href="#i-alert"/></svg><div>
+    <p><strong>Schon erfasst:</strong></p>
+    <ul>{{range .Existing}}<li><a href="/items/{{.ID}}">{{.ListName}}</a> · {{.StatusLabel}}{{if .RequestedBy}} · für {{.RequestedBy}}{{end}}</li>{{end}}</ul>
+    <form method="post" action="/ingest/{{.Token}}">
+      <input type="hidden" name="mode" value="update">
+      <input type="hidden" name="item" value="{{(index .Existing 0).ID}}">
+      <button class="btn sm"><svg class="ic"><use href="#i-refresh"/></svg>Nur Bilder &amp; Profile aktualisieren</button>
+    </form>
+  </div></div>
+  {{end}}
+
+  <form method="post" action="/ingest/{{.Token}}" class="panel">
+    <div class="row">
+      <label>Liste
+        <select name="list">{{range .Lists}}<option value="{{.ID}}">{{.Name}}{{if ne .Role "owner"}} · {{.OwnerName}}{{end}}</option>{{end}}</select>
+      </label>
+      <label>Wunsch von <input name="requested_by" placeholder="z.B. Anna"></label>
+    </div>
+    <div class="row">
+      <label>Anzahl <input type="number" name="quantity" min="1" value="1"></label>
+      <label>Farbe / Material <input name="color"></label>
+    </div>
+    {{if $m.Profiles}}
+    <label>Druckprofil
+      <select name="profile_source">
+        <option value="">– später wählen –</option>
+        {{range $m.Profiles}}<option value="{{.SourceProfileID}}" {{if eq .SourceProfileID $.Data.Ref.ProfileID}}selected{{end}}>{{.Name}}{{if .Printer}} · {{.Printer}}{{end}} · {{duration .PrintTimeSec}}</option>{{end}}
+      </select>
+    </label>
+    {{end}}
+    <label>Notiz <textarea name="note" rows="3"></textarea></label>
+    <button type="submit" class="btn primary big" style="width:100%"><svg class="ic"><use href="#i-plus"/></svg>{{if .Existing}}Zusätzlich hinzufügen{{else}}Ab in die Warteschlange{{end}}</button>
+  </form>
+</div>
+{{end}}{{end}}

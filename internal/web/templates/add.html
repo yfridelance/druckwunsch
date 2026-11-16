@@ -1,0 +1,33 @@
+{{define "content"}}{{with .Data}}
+<div class="narrow">
+  <a href="/" class="back"><svg class="ic"><use href="#i-left"/></svg>Zur Übersicht</a>
+  <div class="eyebrow">// Neuer Druckauftrag</div>
+  <h1 style="margin-bottom:1.25rem">Wunsch erfassen</h1>
+  {{if .Error}}<div class="notice"><svg class="ic"><use href="#i-alert"/></svg><p class="error">{{.Error}}</p></div>{{end}}
+  <form method="post" action="/add" class="panel">
+    <label>Link zum Modell
+      <input type="url" name="url" value="{{.URL}}" placeholder="https://makerworld.com/de/models/…" required autofocus>
+    </label>
+    <label>Titel <small>(optional, wird sonst automatisch geholt)</small>
+      <input name="title" value="{{.Title}}">
+    </label>
+    <div class="row">
+      <label>Liste
+        <select name="list">
+          {{range .Lists}}<option value="{{.ID}}" {{if eq $.Data.ListID .ID}}selected{{end}}>{{.Name}}{{if ne .Role "owner"}} · {{.OwnerName}}{{end}}</option>{{end}}
+        </select>
+      </label>
+      <label>Wunsch von <input name="requested_by" value="{{.RequestedBy}}" placeholder="z.B. Anna"></label>
+    </div>
+    <div class="row">
+      <label>Anzahl <input type="number" name="quantity" min="1" value="1"></label>
+      <label>Farbe / Material <input name="color" placeholder="z.B. PLA rot"></label>
+    </div>
+    <label>Notiz <textarea name="note" rows="3">{{.Note}}</textarea></label>
+    <button type="submit" class="btn primary big" style="width:100%"><svg class="ic"><use href="#i-plus"/></svg>Ab in die Warteschlange</button>
+  </form>
+  <div class="notice" style="margin-top:1.25rem"><svg class="ic"><use href="#i-bookmark"/></svg>
+    <p>MakerWorld lässt den Server keine Daten abrufen. Titel, Bilder und Druckprofile holst du am schnellsten mit dem <a href="/settings">Lesezeichen „→ Druckwunsch“</a> direkt auf der Modellseite.</p>
+  </div>
+</div>
+{{end}}{{end}}

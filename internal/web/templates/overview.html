@@ -1,0 +1,93 @@
+{{define "content"}}{{with .Data}}{{$f := .Filter}}{{$c := .Counts}}
+<div class="hero">
+  <div>
+    <div class="eyebrow">// Druckwarteschlange</div>
+    <h1>{{if index $c "offen"}}<span>{{index $c "offen"}}</span> {{if eq (index $c "offen") 1}}Wunsch wartet{{else}}Wünsche warten{{end}} aufs Druckbett{{else}}Das Druckbett ist <span>leer</span>{{end}}</h1>
+    <p>{{if index $c "in_druck"}}{{index $c "in_druck"}} gerade im Druck · {{end}}{{index $c "gedruckt"}} schon gedruckt</p>
+  </div>
+</div>
+
+<div class="spools">
+  {{$list := $f.ListID}}
+  <a href="/?status=offen&list={{$list}}" class="spool all {{if eq $f.Status "offen"}}active{{end}} {{if not (index $c "offen")}}empty{{end}}"><span class="reel"></span><span><span class="num">{{index $c "offen"}}</span><br><span class="lbl">Offen</span></span></a>
+  {{range workflow}}
+  <a href="/?status={{.Key}}&list={{$list}}" class="spool status-{{.Key}} {{if eq $f.Status .Key}}active{{end}} {{if not (index $c .Key)}}empty{{end}}"><span class="reel"></span><span><span class="num">{{index $c .Key}}</span><br><span class="lbl">{{.Label}}</span></span></a>
+  {{end}}
+</div>
+
+<form method="get" action="/" class="toolbar">
+  <div class="search"><svg class="ic"><use href="#i-search"/></svg><input type="search" name="q" value="{{$f.Query}}" placeholder="Suchen: Titel, Designer, Notiz, für wen…"></div>
+  <select name="status" aria-label="Status" data-autosubmit>
+    <option value="offen" {{if eq $f.Status "offen"}}selected{{end}}>Offen</option>
+    <option value="" {{if eq $f.Status ""}}selected{{end}}>Alle Status</option>
+    {{range statuses}}<option value="{{.Key}}" {{if eq $f.Status .Key}}selected{{end}}>{{.Label}}</option>{{end}}
+  </select>
+  <select name="list" aria-label="Liste" data-autosubmit>
+    <option value="0">Alle Listen</option>
+    {{range .Lists}}<option value="{{.ID}}" {{if eq $f.ListID .ID}}selected{{end}}>{{.Name}}{{if ne .Role "owner"}} · {{.OwnerName}}{{end}}</option>{{end}}
+  </select>
+  {{if .Labels}}
+  <select name="label" aria-label="Label" data-autosubmit>
+    <option value="0">Alle Labels</option>
+    {{range .Labels}}<option value="{{.ID}}" {{if eq $f.LabelID .ID}}selected{{end}}>{{.Name}}</option>{{end}}
+  </select>
+  {{end}}
+  <select name="platform" aria-label="Plattform" data-autosubmit>
+    <option value="">Alle Plattformen</option>
+    {{range $k, $v := .Platforms}}<option value="{{$k}}" {{if eq $f.Platform $k}}selected{{end}}>{{$v}}</option>{{end}}
+  </select>
+  <select name="sort" aria-label="Sortierung" data-autosubmit>
+    <option value="">Neueste zuerst</option>
+    <option value="prio" {{if eq $f.Sort "prio"}}selected{{end}}>Priorität</option>
+    <option value="titel" {{if eq $f.Sort "titel"}}selected{{end}}>Titel A–Z</option>
+  </select>
+  <button type="submit" class="btn icon" aria-label="Filtern"><svg class="ic"><use href="#i-search"/></svg></button>
+</form>
+
+{{if not .Items}}
+<div class="empty">
+  <svg class="bed" viewBox="0 0 180 90" fill="none" aria-hidden="true">
+    <rect x="10" y="62" width="160" height="14" rx="4" stroke="#323c50" stroke-width="2"/>
+    <path class="ln" d="M40 56h100" stroke="#19e3c4" stroke-width="3" stroke-linecap="round"/>
+    <rect x="76" y="14" width="28" height="16" rx="4" fill="#ff7a1a"/><path d="M82 30h16l-5 10h-6z" fill="#ff9a4d"/>
+  </svg>
+  <h3>{{if or $f.Query $f.LabelID $f.Platform}}Nichts gefunden{{else}}Hier wird noch nichts gedruckt{{end}}</h3>
+  <p>Schick Links per <a href="/add">Formular</a>, mit dem <a href="/settings">Lesezeichen</a> direkt von MakerWorld oder über „Teilen“ vom Handy.</p>
+  <a href="/add" class="btn primary"><svg class="ic"><use href="#i-plus"/></svg>Ersten Wunsch erfassen</a>
+</div>
+{{end}}
+
+<div class="cards">
+{{range .Items}}{{$st := .Status}}
+  <article class="card status-{{.Status}}">
+    <a href="/items/{{.ID}}" class="cover" aria-label="{{.Title}}">
+      {{if .CoverImage}}<img src="{{.CoverImage}}" alt="" loading="lazy" referrerpolicy="no-referrer">{{else}}<div class="noimg"><svg class="ic"><use href="#i-cube"/></svg></div>{{end}}
+      <div class="top">
+        <span class="chip">{{platformName .Platform}}{{if ne .MetadataStatus "ok"}} <svg class="ic"><use href="#i-alert"/></svg>{{end}}</span>
+        <span style="display:flex;gap:.35rem">{{if gt .Quantity 1}}<span class="qty">{{.Quantity}}×</span>{{end}}<span class="pill">{{.StatusLabel}}</span></span>
+      </div>
+      <div class="title">{{.Title}}</div>
+    </a>
+    <div class="body">
+      <div class="meta">
+        <span><svg class="ic"><use href="#i-list"/></svg>{{.ListName}}</span>
+        {{if .RequestedBy}}<span><svg class="ic"><use href="#i-gift"/></svg>für <strong>{{.RequestedBy}}</strong></span>{{end}}
+        {{if gt .Priority 0}}<span style="color:var(--orange)"><svg class="ic"><use href="#i-flag"/></svg>{{if eq .Priority 2}}Dringend{{else}}Hoch{{end}}</span>{{end}}
+      </div>
+      {{if .Labels}}<div class="labels">{{range .Labels}}<span class="label" style="--c: {{safeColor .Color}}">{{.Name}}</span>{{end}}</div>{{end}}
+      <div class="foot">
+        <div class="layers" title="{{.StatusLabel}}">{{range seq 4}}<span class="{{layer . $st}}"></span>{{end}}</div>
+        {{if .CanEdit}}
+        <form method="post" action="/items/{{.ID}}/status" class="quick">
+          <input type="hidden" name="back" value="overview">
+          {{if eq .Status "neu"}}<button name="status" value="zu_drucken" class="btn icon" title="Zu drucken"><svg class="ic"><use href="#i-flag"/></svg></button>{{end}}
+          {{if or (eq .Status "neu") (eq .Status "zu_drucken")}}<button name="status" value="in_druck" class="btn icon" title="In Druck"><svg class="ic"><use href="#i-play"/></svg></button>{{end}}
+          {{if ne .Status "gedruckt"}}<button name="status" value="gedruckt" class="btn icon" title="Gedruckt"><svg class="ic"><use href="#i-check"/></svg></button>{{end}}
+        </form>
+        {{end}}
+      </div>
+    </div>
+  </article>
+{{end}}
+</div>
+{{end}}{{end}}

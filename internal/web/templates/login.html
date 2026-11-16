@@ -1,0 +1,19 @@
+{{define "content"}}{{with .Data}}
+<div class="login">
+  <div class="panel login-card">
+    {{template "logo"}}
+    <div class="eyebrow">Druckwarteschlange</div>
+    <h1>Druck<span style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">wunsch</span></h1>
+    <p>Alle „Kannst du das bitte drucken?“ an einem Ort. Von MakerWorld &amp; Co. direkt ab ins Druckbett.</p>
+    {{if .DevMode}}
+    <form method="get" action="/auth/start">
+      <input type="hidden" name="next" value="{{.Next}}">
+      <label>Entwickler-Login (nur lokal) <input name="dev_user" placeholder="Name" required></label>
+      <button type="submit" class="btn primary big">Anmelden</button>
+    </form>
+    {{else}}
+    <a class="btn primary big" href="/auth/start?next={{.Next}}"><svg class="ic"><use href="#i-user"/></svg>Anmelden mit {{.OIDCName}}</a>
+    {{end}}
+  </div>
+</div>
+{{end}}{{end}}
