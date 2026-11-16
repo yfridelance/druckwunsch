@@ -57,6 +57,9 @@ func run() error {
 		ClientID:     env("DW_OIDC_CLIENT_ID", ""),
 		ClientSecret: env("DW_OIDC_CLIENT_SECRET", ""),
 		DevLogin:     env("DW_DEV_LOGIN", "") == "true",
+		GroupsClaim:  env("DW_OIDC_GROUPS_CLAIM", "groups"),
+		PrinterGroup: env("DW_GROUP_PRINTER", "druckwunsch_full"),
+		UserGroup:    env("DW_GROUP_USER", "druckwunsch_limited"),
 	}, st)
 	if err != nil {
 		return err

@@ -22,6 +22,7 @@
   --lime: #a3ff4f;
   --red: #ff4d5e;
 
+  --st-entwurf: #ff3d9a;
   --st-neu: var(--blue);
   --st-zu_drucken: var(--orange);
   --st-in_druck: var(--teal);
@@ -196,7 +197,16 @@ form.inline { display: inline; }
 .label::before { content: ""; width: 6px; height: 6px; border-radius: 2px; background: var(--c); }
 .label input { margin: 0; }
 
+.status-entwurf { --st: var(--st-entwurf); }
 .status-neu { --st: var(--st-neu); }
+.card.status-entwurf { border-style: dashed; border-color: color-mix(in srgb, var(--st-entwurf) 45%, transparent); }
+.card.status-entwurf .cover img { filter: saturate(.55); }
+.draft-banner { margin-bottom: 1.25rem; border-color: color-mix(in srgb, var(--st-entwurf) 45%, transparent); }
+.draft-banner .inline-form { margin-top: .6rem; }
+.requester .or { font-size: .8rem; color: var(--dim); align-self: end; padding-bottom: .9rem; }
+.submit-wish { display: grid; gap: .6rem; grid-template-columns: 1fr 1fr; }
+.submit-wish .hint { grid-column: 1 / -1; margin: 0; font-size: .82rem; color: var(--muted); }
+@media (max-width: 560px) { .submit-wish { grid-template-columns: 1fr; } }
 .status-zu_drucken { --st: var(--st-zu_drucken); }
 .status-in_druck { --st: var(--st-in_druck); }
 .status-gedruckt { --st: var(--st-gedruckt); }

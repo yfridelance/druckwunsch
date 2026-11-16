@@ -14,14 +14,22 @@ type Status struct {
 	Label string
 }
 
-// Statuses in workflow order.
+// Statuses in workflow order. "entwurf" is only visible to the requester's
+// lists until it is released; the printer's queue starts at "neu".
 var Statuses = []Status{
+	{"entwurf", "Entwurf"},
 	{"neu", "Neu"},
 	{"zu_drucken", "Zu drucken"},
 	{"in_druck", "In Druck"},
 	{"gedruckt", "Gedruckt"},
 	{"verworfen", "Verworfen"},
 }
+
+// Workflow are the printer's steps (without draft and discarded).
+var Workflow = Statuses[1:5]
+
+// OpenStatuses are the statuses counted as "offen".
+var OpenStatuses = []string{"entwurf", "neu", "zu_drucken", "in_druck"}
 
 func StatusLabel(key string) string {
 	for _, s := range Statuses {
@@ -52,9 +60,12 @@ type Item struct {
 	ModelID         int64
 	ListID          int64
 	ListName        string
-	Role            Role
+	ListOwner       string
+	Role            Role // the viewer's role on the item's list ("" = no list access)
+	ViewerPrinter   bool // the viewer has the printer role
 	AddedBy         string
-	RequestedBy     string
+	RequesterID     *int64
+	RequestedBy     string // display name of whoever wished it
 	Status          string
 	ChosenProfileID *int64
 	Quantity        int
@@ -75,12 +86,34 @@ type Item struct {
 }
 
 func (i Item) StatusLabel() string { return StatusLabel(i.Status) }
-func (i Item) CanEdit() bool       { return i.Role.CanEdit() }
+
+// CanManage: may move or delete the item (list editors).
+func (i Item) CanManage() bool { return i.Role.CanEdit() }
+
+// CanEdit: may change details, labels and profile. Printers may do so on
+// every released wish.
+func (i Item) CanEdit() bool {
+	return i.Role.CanEdit() || (i.ViewerPrinter && i.Status != "entwurf")
+}
+
+// CanPrint: may move the item through the print workflow.
+func (i Item) CanPrint() bool { return i.ViewerPrinter && i.Status != "entwurf" }
+
+// CanRelease: may hand a draft over to the printer.
+func (i Item) CanRelease() bool { return i.Role.CanEdit() && i.Status == "entwurf" }
+
+// CanWithdraw: may take a released wish back as long as nobody started on it.
+func (i Item) CanWithdraw() bool { return i.Role.CanEdit() && i.Status == "neu" }
+
+// CanSetRequester: only printers record wishes on behalf of others.
+func (i Item) CanSetRequester() bool { return i.ViewerPrinter && i.CanEdit() }
 
 type ItemInput struct {
 	ModelID     int64
 	ListID      int64
-	RequestedBy string
+	RequesterID int64  // 0 = the creating user
+	RequestedBy string // free-text name instead of a user (printers only)
+	Release     bool   // requesters: release right away instead of keeping a draft
 	Note        string
 	Quantity    int
 	Color       string
@@ -88,35 +121,53 @@ type ItemInput struct {
 }
 
 type Filter struct {
-	ListID   int64
-	Status   string
-	LabelID  int64
-	Platform string
-	Query    string
-	Sort     string // "neu" (default), "prio", "titel"
+	ListID      int64
+	RequesterID int64
+	Status      string
+	LabelID     int64
+	Platform    string
+	Query       string
+	Sort        string // "neu" (default), "prio", "titel"
 }
 
-const itemSelect = `
-	SELECT i.id, i.model_id, i.list_id, l.name, a.role, COALESCE(NULLIF(u.name,''), u.email),
-	       i.requested_by, i.status, i.chosen_profile_id, i.quantity, i.color, i.priority, i.note,
-	       i.printed_at, i.created_at,
-	       m.platform, COALESCE(NULLIF(m.title,''), m.url), m.url, m.designer, m.cover_image, m.metadata_status
+// itemFrom joins everything an item row needs and restricts it to what the
+// viewer may see: items in their lists, wishes made for them, and, for
+// printers, every released wish. Parameters: viewer id ×3.
+const itemFrom = `
 	FROM items i
-	JOIN (` + accessibleListsSQL + `) a ON a.list_id = i.list_id
+	LEFT JOIN (` + accessibleListsSQL + `) a ON a.list_id = i.list_id
+	JOIN users v ON v.id = ?
 	JOIN lists l ON l.id = i.list_id
+	JOIN users lo ON lo.id = l.owner_id
 	JOIN models m ON m.id = i.model_id
-	JOIN users u ON u.id = i.added_by`
+	JOIN users u ON u.id = i.added_by
+	LEFT JOIN users r ON r.id = i.requester_id
+	WHERE (a.role IS NOT NULL OR i.requester_id = v.id OR (v.role = 'drucker' AND i.status <> 'entwurf'))`
+
+const itemSelect = `
+	SELECT i.id, i.model_id, i.list_id, l.name, COALESCE(NULLIF(lo.name,''), lo.email), COALESCE(a.role, ''),
+	       v.role = 'drucker', COALESCE(NULLIF(u.name,''), u.email),
+	       i.requester_id, COALESCE(NULLIF(r.name,''), r.email, i.requested_by),
+	       i.status, i.chosen_profile_id, i.quantity, i.color, i.priority, i.note,
+	       i.printed_at, i.created_at,
+	       m.platform, COALESCE(NULLIF(m.title,''), m.url), m.url, m.designer, m.cover_image, m.metadata_status` + itemFrom
+
+func viewerArgs(userID int64) []any { return []any{userID, userID, userID} }
 
 func scanItem(sc interface{ Scan(...any) error }) (Item, error) {
 	var it Item
-	var prof sql.NullInt64
+	var prof, req sql.NullInt64
 	var printed sql.NullTime
-	err := sc.Scan(&it.ID, &it.ModelID, &it.ListID, &it.ListName, &it.Role, &it.AddedBy,
-		&it.RequestedBy, &it.Status, &prof, &it.Quantity, &it.Color, &it.Priority, &it.Note,
+	err := sc.Scan(&it.ID, &it.ModelID, &it.ListID, &it.ListName, &it.ListOwner, &it.Role,
+		&it.ViewerPrinter, &it.AddedBy, &req, &it.RequestedBy,
+		&it.Status, &prof, &it.Quantity, &it.Color, &it.Priority, &it.Note,
 		&printed, &it.CreatedAt,
 		&it.Platform, &it.Title, &it.URL, &it.Designer, &it.CoverImage, &it.MetadataStatus)
 	if prof.Valid {
 		it.ChosenProfileID = &prof.Int64
+	}
+	if req.Valid {
+		it.RequesterID = &req.Int64
 	}
 	if printed.Valid {
 		it.PrintedAt = &printed.Time
@@ -124,42 +175,7 @@ func scanItem(sc interface{ Scan(...any) error }) (Item, error) {
 	return it, err
 }
 
-// Items returns all items visible to the user, filtered.
-func (s *Store) Items(ctx context.Context, userID int64, f Filter) ([]Item, error) {
-	q := itemSelect + ` WHERE 1=1`
-	args := []any{userID, userID}
-	if f.ListID != 0 {
-		q += ` AND i.list_id = ?`
-		args = append(args, f.ListID)
-	}
-	if f.Status == "offen" {
-		q += ` AND i.status IN ('neu','zu_drucken','in_druck')`
-	} else if f.Status != "" {
-		q += ` AND i.status = ?`
-		args = append(args, f.Status)
-	}
-	if f.LabelID != 0 {
-		q += ` AND EXISTS (SELECT 1 FROM item_labels il WHERE il.item_id = i.id AND il.label_id = ?)`
-		args = append(args, f.LabelID)
-	}
-	if f.Platform != "" {
-		q += ` AND m.platform = ?`
-		args = append(args, f.Platform)
-	}
-	if t := strings.TrimSpace(f.Query); t != "" {
-		like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(t) + "%"
-		q += ` AND (m.title LIKE ? ESCAPE '\' OR m.designer LIKE ? ESCAPE '\' OR i.note LIKE ? ESCAPE '\'
-		            OR i.requested_by LIKE ? ESCAPE '\' OR m.url LIKE ? ESCAPE '\')`
-		args = append(args, like, like, like, like, like)
-	}
-	switch f.Sort {
-	case "prio":
-		q += ` ORDER BY i.priority DESC, i.created_at DESC`
-	case "titel":
-		q += ` ORDER BY m.title COLLATE NOCASE`
-	default:
-		q += ` ORDER BY i.created_at DESC, i.id DESC`
-	}
+func (s *Store) queryItems(ctx context.Context, q string, args ...any) ([]Item, error) {
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, err
@@ -173,10 +189,89 @@ func (s *Store) Items(ctx context.Context, userID int64, f Filter) ([]Item, erro
 		}
 		out = append(out, it)
 	}
-	if err := rows.Err(); err != nil {
+	return out, rows.Err()
+}
+
+func filterSQL(f Filter) (string, []any) {
+	var q strings.Builder
+	var args []any
+	if f.ListID != 0 {
+		q.WriteString(` AND i.list_id = ?`)
+		args = append(args, f.ListID)
+	}
+	if f.RequesterID != 0 {
+		q.WriteString(` AND i.requester_id = ?`)
+		args = append(args, f.RequesterID)
+	}
+	if f.LabelID != 0 {
+		q.WriteString(` AND EXISTS (SELECT 1 FROM item_labels il WHERE il.item_id = i.id AND il.label_id = ?)`)
+		args = append(args, f.LabelID)
+	}
+	if f.Platform != "" {
+		q.WriteString(` AND m.platform = ?`)
+		args = append(args, f.Platform)
+	}
+	if t := strings.TrimSpace(f.Query); t != "" {
+		like := "%" + strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(t) + "%"
+		q.WriteString(` AND (m.title LIKE ? ESCAPE '\' OR m.designer LIKE ? ESCAPE '\' OR i.note LIKE ? ESCAPE '\'
+		            OR COALESCE(r.name, i.requested_by) LIKE ? ESCAPE '\' OR m.url LIKE ? ESCAPE '\')`)
+		args = append(args, like, like, like, like, like)
+	}
+	return q.String(), args
+}
+
+// Items returns all items visible to the user, filtered.
+func (s *Store) Items(ctx context.Context, userID int64, f Filter) ([]Item, error) {
+	where, fargs := filterSQL(f)
+	q := itemSelect + where
+	args := append(viewerArgs(userID), fargs...)
+	if f.Status == "offen" {
+		q += ` AND i.status IN ('` + strings.Join(OpenStatuses, "','") + `')`
+	} else if f.Status != "" {
+		q += ` AND i.status = ?`
+		args = append(args, f.Status)
+	}
+	switch f.Sort {
+	case "prio":
+		q += ` ORDER BY i.priority DESC, i.created_at DESC`
+	case "titel":
+		q += ` ORDER BY m.title COLLATE NOCASE`
+	default:
+		q += ` ORDER BY i.created_at DESC, i.id DESC`
+	}
+	out, err := s.queryItems(ctx, q, args...)
+	if err != nil {
 		return nil, err
 	}
 	return out, s.attachLabels(ctx, out)
+}
+
+// StatusCounts counts the visible items per status, with the same filters
+// as Items (the status filter itself is ignored).
+func (s *Store) StatusCounts(ctx context.Context, userID int64, f Filter) (map[string]int, error) {
+	where, fargs := filterSQL(f)
+	rows, err := s.db.QueryContext(ctx, `SELECT i.status, COUNT(*)`+itemFrom+where+` GROUP BY i.status`,
+		append(viewerArgs(userID), fargs...)...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]int{}
+	for rows.Next() {
+		var k string
+		var n int
+		if err := rows.Scan(&k, &n); err != nil {
+			return nil, err
+		}
+		out[k] = n
+		out["alle"] += n
+		for _, o := range OpenStatuses {
+			if k == o {
+				out["offen"] += n
+			}
+		}
+	}
+	return out, rows.Err()
 }
 
 func (s *Store) attachLabels(ctx context.Context, items []Item) error {
@@ -209,7 +304,7 @@ func (s *Store) attachLabels(ctx context.Context, items []Item) error {
 
 // Item returns one item if the user may see it.
 func (s *Store) Item(ctx context.Context, userID, itemID int64) (Item, error) {
-	it, err := scanItem(s.db.QueryRowContext(ctx, itemSelect+` WHERE i.id = ?`, userID, userID, itemID))
+	it, err := scanItem(s.db.QueryRowContext(ctx, itemSelect+` AND i.id = ?`, append(viewerArgs(userID), itemID)...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return it, ErrNotFound
 	}
@@ -223,20 +318,7 @@ func (s *Store) Item(ctx context.Context, userID, itemID int64) (Item, error) {
 
 // ItemsForModel returns all visible items of a model (to show "already in list X").
 func (s *Store) ItemsForModel(ctx context.Context, userID, modelID int64) ([]Item, error) {
-	rows, err := s.db.QueryContext(ctx, itemSelect+` WHERE i.model_id = ? ORDER BY i.created_at`, userID, userID, modelID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var out []Item
-	for rows.Next() {
-		it, err := scanItem(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, it)
-	}
-	return out, rows.Err()
+	return s.queryItems(ctx, itemSelect+` AND i.model_id = ? ORDER BY i.created_at`, append(viewerArgs(userID), modelID)...)
 }
 
 func (s *Store) requireListEdit(ctx context.Context, userID, listID int64) error {
@@ -261,9 +343,42 @@ func (s *Store) requireItemEdit(ctx context.Context, userID, itemID int64) (Item
 	return it, nil
 }
 
+func (s *Store) isPrinter(ctx context.Context, userID int64) bool {
+	u, err := s.UserByID(ctx, userID)
+	return err == nil && u.IsPrinter()
+}
+
+// resolveRequester decides who a wish is for. Requesters always wish for
+// themselves; printers may name another user or a free-text name.
+func (s *Store) resolveRequester(ctx context.Context, userID int64, printer bool, reqID int64, reqName string) (any, string, error) {
+	if !printer {
+		return userID, "", nil
+	}
+	if reqName = strings.TrimSpace(reqName); reqName != "" {
+		return nil, reqName, nil
+	}
+	if reqID == 0 {
+		return userID, "", nil
+	}
+	if _, err := s.UserByID(ctx, reqID); err != nil {
+		return nil, "", err
+	}
+	return reqID, "", nil
+}
+
 func (s *Store) CreateItem(ctx context.Context, userID int64, in ItemInput) (int64, error) {
 	if err := s.requireListEdit(ctx, userID, in.ListID); err != nil {
 		return 0, err
+	}
+	printer := s.isPrinter(ctx, userID)
+	reqID, reqName, err := s.resolveRequester(ctx, userID, printer, in.RequesterID, in.RequestedBy)
+	if err != nil {
+		return 0, err
+	}
+	// Printers' own entries go straight into the queue.
+	status := "entwurf"
+	if printer || in.Release {
+		status = "neu"
 	}
 	if in.Quantity < 1 {
 		in.Quantity = 1
@@ -272,13 +387,17 @@ func (s *Store) CreateItem(ctx context.Context, userID int64, in ItemInput) (int
 		in.ProfileID = nil
 	}
 	res, err := s.db.ExecContext(ctx, `
-		INSERT INTO items (model_id, list_id, added_by, requested_by, note, quantity, color, chosen_profile_id)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		in.ModelID, in.ListID, userID, in.RequestedBy, in.Note, in.Quantity, in.Color, in.ProfileID)
+		INSERT INTO items (model_id, list_id, added_by, requester_id, requested_by, status, note, quantity, color, chosen_profile_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		in.ModelID, in.ListID, userID, reqID, reqName, status, in.Note, in.Quantity, in.Color, in.ProfileID)
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	id, err := res.LastInsertId()
+	if err == nil && status == "neu" && !printer {
+		err = s.addComment(ctx, id, userID, "Freigegeben", true)
+	}
+	return id, err
 }
 
 func (s *Store) profileBelongs(ctx context.Context, profileID, modelID int64) bool {
@@ -287,8 +406,11 @@ func (s *Store) profileBelongs(ctx context.Context, profileID, modelID int64) bo
 	return n > 0
 }
 
+// SetStatus changes the status. Requesters (list editors) may only release
+// a draft or withdraw it again while it is "neu"; printers run the rest of
+// the workflow on released wishes.
 func (s *Store) SetStatus(ctx context.Context, userID, itemID int64, status string) error {
-	it, err := s.requireItemEdit(ctx, userID, itemID)
+	it, err := s.Item(ctx, userID, itemID)
 	if err != nil {
 		return err
 	}
@@ -298,6 +420,16 @@ func (s *Store) SetStatus(ctx context.Context, userID, itemID int64, status stri
 	if it.Status == status {
 		return nil
 	}
+	msg := "Status: " + StatusLabel(it.Status) + " → " + StatusLabel(status)
+	switch {
+	case it.Status == "entwurf" && status == "neu" && it.CanRelease():
+		msg = "Freigegeben"
+	case it.Status == "neu" && status == "entwurf" && it.CanWithdraw():
+		msg = "Zurückgezogen"
+	case it.CanPrint() && status != "entwurf":
+	default:
+		return ErrForbidden
+	}
 	var printed any
 	if status == "gedruckt" {
 		printed = time.Now().UTC()
@@ -306,27 +438,76 @@ func (s *Store) SetStatus(ctx context.Context, userID, itemID int64, status stri
 		status, printed, itemID); err != nil {
 		return err
 	}
-	return s.addComment(ctx, itemID, userID, "Status: "+StatusLabel(it.Status)+" → "+StatusLabel(status), true)
+	return s.addComment(ctx, itemID, userID, msg, true)
+}
+
+// ReleaseDrafts releases all drafts in the user's editable lists (or in one
+// of them) and returns how many were released.
+func (s *Store) ReleaseDrafts(ctx context.Context, userID, listID int64) (int, error) {
+	q := `SELECT i.id FROM items i JOIN (` + accessibleListsSQL + `) a ON a.list_id = i.list_id
+		WHERE i.status = 'entwurf' AND a.role IN ('owner', 'editor')`
+	args := []any{userID, userID}
+	if listID != 0 {
+		q += ` AND i.list_id = ?`
+		args = append(args, listID)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return 0, err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	for _, id := range ids {
+		if err := s.SetStatus(ctx, userID, id, "neu"); err != nil {
+			return 0, err
+		}
+	}
+	return len(ids), nil
 }
 
 type ItemUpdate struct {
-	RequestedBy string
-	Note        string
-	Quantity    int
-	Color       string
-	Priority    int
+	Note     string
+	Quantity int
+	Color    string
+	Priority int
+
+	SetRequester bool // printers only
+	RequesterID  int64
+	RequestedBy  string
 }
 
 func (s *Store) UpdateItem(ctx context.Context, userID, itemID int64, u ItemUpdate) error {
-	if _, err := s.requireItemEdit(ctx, userID, itemID); err != nil {
+	it, err := s.requireItemEdit(ctx, userID, itemID)
+	if err != nil {
 		return err
 	}
 	if u.Quantity < 1 {
 		u.Quantity = 1
 	}
-	_, err := s.db.ExecContext(ctx, `
-		UPDATE items SET requested_by=?, note=?, quantity=?, color=?, priority=?, updated_at=CURRENT_TIMESTAMP
-		WHERE id=?`, u.RequestedBy, u.Note, u.Quantity, u.Color, u.Priority, itemID)
+	if u.Priority < -1 || u.Priority > 2 {
+		u.Priority = 0
+	}
+	if _, err := s.db.ExecContext(ctx, `
+		UPDATE items SET note=?, quantity=?, color=?, priority=?, updated_at=CURRENT_TIMESTAMP
+		WHERE id=?`, u.Note, u.Quantity, u.Color, u.Priority, itemID); err != nil {
+		return err
+	}
+	if !u.SetRequester || !it.CanSetRequester() {
+		return nil
+	}
+	reqID, reqName, err := s.resolveRequester(ctx, userID, true, u.RequesterID, u.RequestedBy)
+	if err != nil {
+		return err
+	}
+	_, err = s.db.ExecContext(ctx, `UPDATE items SET requester_id = ?, requested_by = ? WHERE id = ?`, reqID, reqName, itemID)
 	return err
 }
 
@@ -348,7 +529,7 @@ func (s *Store) MoveItem(ctx context.Context, userID, itemID, targetList int64, 
 	if err != nil {
 		return 0, err
 	}
-	if !copy && !it.CanEdit() {
+	if !copy && !it.CanManage() {
 		return 0, ErrForbidden
 	}
 	if err := s.requireListEdit(ctx, userID, targetList); err != nil {
@@ -358,17 +539,27 @@ func (s *Store) MoveItem(ctx context.Context, userID, itemID, targetList int64, 
 		_, err := s.db.ExecContext(ctx, `UPDATE items SET list_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, targetList, itemID)
 		return itemID, err
 	}
-	return s.CreateItem(ctx, userID, ItemInput{
-		ModelID: it.ModelID, ListID: targetList, RequestedBy: it.RequestedBy, Note: it.Note,
+	in := ItemInput{
+		ModelID: it.ModelID, ListID: targetList, Note: it.Note,
 		Quantity: it.Quantity, Color: it.Color, ProfileID: it.ChosenProfileID,
-	})
+	}
+	if it.RequesterID != nil {
+		in.RequesterID = *it.RequesterID
+	} else {
+		in.RequestedBy = it.RequestedBy
+	}
+	return s.CreateItem(ctx, userID, in)
 }
 
 func (s *Store) DeleteItem(ctx context.Context, userID, itemID int64) error {
-	if _, err := s.requireItemEdit(ctx, userID, itemID); err != nil {
+	it, err := s.Item(ctx, userID, itemID)
+	if err != nil {
 		return err
 	}
-	_, err := s.db.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, itemID)
+	if !it.CanManage() {
+		return ErrForbidden
+	}
+	_, err = s.db.ExecContext(ctx, `DELETE FROM items WHERE id = ?`, itemID)
 	return err
 }
 
@@ -491,33 +682,4 @@ func (s *Store) CountPending(ctx context.Context) (int, error) {
 	var n int
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM pending_ingest`).Scan(&n)
 	return n, err
-}
-
-// StatusCounts counts the visible items per status (optionally for one list).
-func (s *Store) StatusCounts(ctx context.Context, userID, listID int64) (map[string]int, error) {
-	q := `SELECT i.status, COUNT(*) FROM items i JOIN (` + accessibleListsSQL + `) a ON a.list_id = i.list_id`
-	args := []any{userID, userID}
-	if listID != 0 {
-		q += ` WHERE i.list_id = ?`
-		args = append(args, listID)
-	}
-	rows, err := s.db.QueryContext(ctx, q+` GROUP BY i.status`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := map[string]int{}
-	for rows.Next() {
-		var k string
-		var n int
-		if err := rows.Scan(&k, &n); err != nil {
-			return nil, err
-		}
-		out[k] = n
-		out["alle"] += n
-		if k == "neu" || k == "zu_drucken" || k == "in_druck" {
-			out["offen"] += n
-		}
-	}
-	return out, rows.Err()
 }

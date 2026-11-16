@@ -5,10 +5,12 @@
     <div class="eyebrow">Druckwarteschlange</div>
     <h1>Druck<span style="background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent">wunsch</span></h1>
     <p>Alle „Kannst du das bitte drucken?“ an einem Ort. Von MakerWorld &amp; Co. direkt ab ins Druckbett.</p>
+    {{if .Denied}}<div class="notice"><svg class="ic"><use href="#i-alert"/></svg><p><strong>Kein Zugriff.</strong> Dein Konto ist in keiner Druckwunsch-Gruppe. Frag den Admin, ob er dich hinzufügt.</p></div>{{end}}
     {{if .DevMode}}
     <form method="get" action="/auth/start">
       <input type="hidden" name="next" value="{{.Next}}">
       <label>Entwickler-Login (nur lokal) <input name="dev_user" placeholder="Name" required></label>
+      <label>Rolle <select name="dev_role"><option value="drucker">Drucker</option><option value="wuenscher">Wünscher</option></select></label>
       <button type="submit" class="btn primary big">Anmelden</button>
     </form>
     {{else}}

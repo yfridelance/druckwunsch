@@ -3,7 +3,7 @@
   <div>
     <div class="eyebrow">// Werkzeugkiste</div>
     <h1>Einstellungen</h1>
-    <p>Lesezeichen, Handy-Teilen und Labels.</p>
+    <p>Lesezeichen, Handy-Teilen{{if $.User.IsPrinter}} und Labels{{end}}.</p>
   </div>
 </div>
 
@@ -44,6 +44,7 @@
     </ol>
   </div>
 
+  {{if $.User.IsPrinter}}
   <div class="panel wide" id="labels">
     <h3><svg class="ic"><use href="#i-tag"/></svg>Labels</h3>
     <p class="muted">Gelten für alle, z.B. „Geschenk“, „Ersatzteil“, „Multicolor“, „AMS“.</p>
@@ -61,5 +62,6 @@
       <button class="btn primary"><svg class="ic"><use href="#i-plus"/></svg>Anlegen</button>
     </form>
   </div>
+  {{end}}
 </div>
 {{end}}{{end}}

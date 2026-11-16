@@ -14,7 +14,16 @@ type User struct {
 	Sub   string
 	Email string
 	Name  string
+	Role  string // RolePrinter or RoleRequester
 }
+
+// User roles, derived from the IdP groups at login.
+const (
+	RolePrinter   = "drucker"   // prints wishes and runs the queue
+	RoleRequester = "wuenscher" // only makes wishes
+)
+
+func (u User) IsPrinter() bool { return u.Role == RolePrinter }
 
 // DisplayName returns the best human-readable name.
 func (u User) DisplayName() string {
@@ -29,17 +38,20 @@ func (u User) DisplayName() string {
 
 // UpsertUser creates or updates a user by OIDC subject and makes sure the
 // user has an inbox list.
-func (s *Store) UpsertUser(ctx context.Context, sub, email, name string) (User, error) {
+func (s *Store) UpsertUser(ctx context.Context, sub, email, name, role string) (User, error) {
+	if role != RolePrinter {
+		role = RoleRequester
+	}
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO users (oidc_sub, email, name) VALUES (?, ?, ?)
-		ON CONFLICT (oidc_sub) DO UPDATE SET email = excluded.email, name = excluded.name`,
-		sub, email, name)
+		INSERT INTO users (oidc_sub, email, name, role) VALUES (?, ?, ?, ?)
+		ON CONFLICT (oidc_sub) DO UPDATE SET email = excluded.email, name = excluded.name, role = excluded.role`,
+		sub, email, name, role)
 	if err != nil {
 		return User{}, err
 	}
 	var u User
-	if err := s.db.QueryRowContext(ctx, `SELECT id, oidc_sub, email, name FROM users WHERE oidc_sub = ?`, sub).
-		Scan(&u.ID, &u.Sub, &u.Email, &u.Name); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT id, oidc_sub, email, name, role FROM users WHERE oidc_sub = ?`, sub).
+		Scan(&u.ID, &u.Sub, &u.Email, &u.Name, &u.Role); err != nil {
 		return User{}, err
 	}
 	if _, err := s.InboxID(ctx, u.ID); err != nil {
@@ -50,8 +62,8 @@ func (s *Store) UpsertUser(ctx context.Context, sub, email, name string) (User, 
 
 func (s *Store) UserByID(ctx context.Context, id int64) (User, error) {
 	var u User
-	err := s.db.QueryRowContext(ctx, `SELECT id, oidc_sub, email, name FROM users WHERE id = ?`, id).
-		Scan(&u.ID, &u.Sub, &u.Email, &u.Name)
+	err := s.db.QueryRowContext(ctx, `SELECT id, oidc_sub, email, name, role FROM users WHERE id = ?`, id).
+		Scan(&u.ID, &u.Sub, &u.Email, &u.Name, &u.Role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, ErrNotFound
 	}
@@ -59,7 +71,7 @@ func (s *Store) UserByID(ctx context.Context, id int64) (User, error) {
 }
 
 func (s *Store) Users(ctx context.Context) ([]User, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, oidc_sub, email, name FROM users ORDER BY name, email`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, oidc_sub, email, name, role FROM users ORDER BY name, email`)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +79,7 @@ func (s *Store) Users(ctx context.Context) ([]User, error) {
 	var out []User
 	for rows.Next() {
 		var u User
-		if err := rows.Scan(&u.ID, &u.Sub, &u.Email, &u.Name); err != nil {
+		if err := rows.Scan(&u.ID, &u.Sub, &u.Email, &u.Name, &u.Role); err != nil {
 			return nil, err
 		}
 		out = append(out, u)
@@ -93,9 +105,9 @@ func (s *Store) CreateSession(ctx context.Context, userID int64, ttl time.Durati
 func (s *Store) SessionUser(ctx context.Context, token string) (User, error) {
 	var u User
 	err := s.db.QueryRowContext(ctx, `
-		SELECT u.id, u.oidc_sub, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
+		SELECT u.id, u.oidc_sub, u.email, u.name, u.role FROM sessions s JOIN users u ON u.id = s.user_id
 		WHERE s.token = ? AND s.expires_at > ?`, token, time.Now().UTC()).
-		Scan(&u.ID, &u.Sub, &u.Email, &u.Name)
+		Scan(&u.ID, &u.Sub, &u.Email, &u.Name, &u.Role)
 	if errors.Is(err, sql.ErrNoRows) {
 		return u, ErrNotFound
 	}

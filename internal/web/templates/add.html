@@ -17,14 +17,14 @@
           {{range .Lists}}<option value="{{.ID}}" {{if eq $.Data.ListID .ID}}selected{{end}}>{{.Name}}{{if ne .Role "owner"}} · {{.OwnerName}}{{end}}</option>{{end}}
         </select>
       </label>
-      <label>Wunsch von <input name="requested_by" value="{{.RequestedBy}}" placeholder="z.B. Anna"></label>
     </div>
+    {{if .Users}}{{template "requester" (dict "Users" .Users "ID" (or .RequesterID $.User.ID) "Name" .RequestedBy "Me" $.User.ID)}}{{end}}
     <div class="row">
       <label>Anzahl <input type="number" name="quantity" min="1" value="1"></label>
       <label>Farbe / Material <input name="color" placeholder="z.B. PLA rot"></label>
     </div>
     <label>Notiz <textarea name="note" rows="3">{{.Note}}</textarea></label>
-    <button type="submit" class="btn primary big" style="width:100%"><svg class="ic"><use href="#i-plus"/></svg>Ab in die Warteschlange</button>
+    {{template "submit-wish" $.User.IsPrinter}}
   </form>
   <div class="notice" style="margin-top:1.25rem"><svg class="ic"><use href="#i-bookmark"/></svg>
     <p>MakerWorld lässt den Server keine Daten abrufen. Titel, Bilder und Druckprofile holst du am schnellsten mit dem <a href="/settings">Lesezeichen „→ Druckwunsch“</a> direkt auf der Modellseite.</p>

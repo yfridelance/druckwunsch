@@ -42,7 +42,12 @@
     {{end}}
 
     <div class="eyebrow" style="margin-top:.4rem">Status</div>
-    {{if $it.CanEdit}}
+    {{if eq $it.Status "entwurf"}}
+    <div class="notice"><svg class="ic"><use href="#i-alert"/></svg><div>
+      <p><strong>Entwurf</strong> – der Drucker sieht diesen Wunsch erst, wenn du ihn freigibst.</p>
+      {{if $it.CanRelease}}<form method="post" action="/items/{{$it.ID}}/status" class="inline"><button name="status" value="neu" class="btn primary"><svg class="ic"><use href="#i-right"/></svg>An den Drucker freigeben</button></form>{{end}}
+    </div></div>
+    {{else if $it.CanPrint}}
     <form method="post" action="/items/{{$it.ID}}/status">
       <div class="stepper">
         {{range $i, $s := workflow}}
@@ -52,7 +57,9 @@
       <div class="step-alt"><button name="status" value="verworfen" class="btn sm ghost {{if eq $it.Status "verworfen"}}cur{{end}}"><svg class="ic"><use href="#i-trash"/></svg>Verwerfen</button></div>
     </form>
     {{else}}
-    <div class="layers" style="height:12px;margin-bottom:1rem">{{range seq 4}}<span class="{{layer . $it.Status}}"></span>{{end}}</div>
+    <div class="layers" style="height:12px;margin-bottom:.6rem">{{range seq 4}}<span class="{{layer . $it.Status}}"></span>{{end}}</div>
+    {{if $it.CanWithdraw}}<form method="post" action="/items/{{$it.ID}}/status" class="step-alt" data-confirm="Wunsch zurückziehen? Er wird wieder zum Entwurf."><button name="status" value="entwurf" class="btn sm ghost"><svg class="ic"><use href="#i-left"/></svg>Zurückziehen</button></form>
+    {{else if not (eq $it.Status "gedruckt" "verworfen")}}<p><small>Der Drucker ist dran – Änderungswünsche bitte als Kommentar.</small></p>{{end}}
     {{end}}
 
     <div class="eyebrow">Labels</div>
@@ -124,7 +131,8 @@
       <h3><svg class="ic"><use href="#i-gift"/></svg>Der Wunsch</h3>
       {{if $it.CanEdit}}
       <form method="post" action="/items/{{$it.ID}}/edit">
-        <label>Wunsch von <input name="requested_by" value="{{$it.RequestedBy}}" placeholder="z.B. Anna"></label>
+        {{if $it.CanSetRequester}}{{template "requester" (dict "Users" .Users "ID" $it.RequesterID "Name" (or (and (not $it.RequesterID) $it.RequestedBy) "") "Me" $.User.ID)}}
+        {{else}}<div class="fact" style="margin-bottom:.75rem"><div class="k">Wunsch von</div><div class="v">{{or $it.RequestedBy "–"}}</div></div>{{end}}
         <div class="row">
           <label>Anzahl <input type="number" min="1" name="quantity" value="{{$it.Quantity}}"></label>
           <label>Priorität
@@ -142,7 +150,7 @@
       </form>
       {{else}}
       <div class="facts">
-        <div class="fact"><div class="k">Für</div><div class="v">{{or $it.RequestedBy "–"}}</div></div>
+        <div class="fact"><div class="k">Von</div><div class="v">{{or $it.RequestedBy "–"}}</div></div>
         <div class="fact"><div class="k">Anzahl</div><div class="v">{{$it.Quantity}}</div></div>
         <div class="fact"><div class="k">Farbe</div><div class="v">{{or $it.Color "–"}}</div></div>
       </div>
@@ -152,14 +160,14 @@
 
     <div class="panel">
       <div class="facts" style="margin:0">
-        <div class="fact"><div class="k">Liste</div><div class="v"><a href="/?list={{$it.ListID}}&status=">{{$it.ListName}}</a></div></div>
+        <div class="fact"><div class="k">Liste</div><div class="v">{{if $it.Role}}<a href="/?list={{$it.ListID}}&status=">{{$it.ListName}}</a>{{else}}{{$it.ListName}} <small>· {{$it.ListOwner}}</small>{{end}}</div></div>
         <div class="fact"><div class="k">Erfasst</div><div class="v">{{$it.AddedBy}}</div></div>
         <div class="fact"><div class="k">Am</div><div class="v mono">{{date $it.CreatedAt}}</div></div>
         {{if $it.PrintedAt}}<div class="fact"><div class="k">Gedruckt</div><div class="v mono">{{date $it.PrintedAt}}</div></div>{{end}}
       </div>
       {{if .Others}}
       <div class="eyebrow" style="margin-top:1rem">Auch gewünscht in</div>
-      {{range .Others}}<p style="margin:.2rem 0"><a href="/items/{{.ID}}">{{.ListName}}</a> <span class="pill status-{{.Status}}">{{.StatusLabel}}</span>{{if .RequestedBy}} <small>für {{.RequestedBy}}</small>{{end}}</p>{{end}}
+      {{range .Others}}<p style="margin:.2rem 0"><a href="/items/{{.ID}}">{{.ListName}}</a> <span class="pill status-{{.Status}}">{{.StatusLabel}}</span>{{if .RequestedBy}} <small>von {{.RequestedBy}}</small>{{end}}</p>{{end}}
       {{end}}
     </div>
 
@@ -172,11 +180,11 @@
             <select name="list">{{range .Lists}}{{if ne .ID $it.ListID}}<option value="{{.ID}}">{{.Name}}{{if ne .Role "owner"}} · {{.OwnerName}}{{end}}</option>{{end}}{{end}}</select>
           </label>
           <div class="inline-form">
-            {{if $it.CanEdit}}<button name="copy" value="0" class="btn sm"><svg class="ic"><use href="#i-right"/></svg>Verschieben</button>{{end}}
+            {{if $it.CanManage}}<button name="copy" value="0" class="btn sm"><svg class="ic"><use href="#i-right"/></svg>Verschieben</button>{{end}}
             <button name="copy" value="1" class="btn sm"><svg class="ic"><use href="#i-copy"/></svg>Kopieren</button>
           </div>
         </form>
-        {{if $it.CanEdit}}
+        {{if $it.CanManage}}
         <form method="post" action="/items/{{$it.ID}}/delete" data-confirm="Eintrag wirklich löschen?" style="margin-top:1rem">
           <button class="btn sm danger"><svg class="ic"><use href="#i-trash"/></svg>Eintrag löschen</button>
         </form>

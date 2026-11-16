@@ -14,6 +14,27 @@
   <path class="fil l3" d="M18 40h28" stroke="url(#lt)" stroke-width="3.2" stroke-linecap="round" fill="none" opacity=".6"/>
 </svg>{{end}}
 
+{{define "requester"}}
+<div class="row requester">
+  <label>Wunsch von
+    <select name="requester">
+      {{$id := deref .ID}}{{$me := .Me}}{{range .Users}}<option value="{{.ID}}" {{if eq $id .ID}}selected{{end}}>{{.DisplayName}}{{if eq $me .ID}} (ich){{end}}</option>{{end}}
+    </select>
+  </label>
+  <label>… oder Name ohne Login <input name="requested_by" value="{{.Name}}" placeholder="z.B. Oma"></label>
+</div>
+{{end}}
+
+{{define "submit-wish"}}{{if .}}
+<button type="submit" class="btn primary big" style="width:100%"><svg class="ic"><use href="#i-plus"/></svg>Ab in die Warteschlange</button>
+{{else}}
+<div class="submit-wish">
+  <button type="submit" name="release" value="1" class="btn primary big"><svg class="ic"><use href="#i-right"/></svg>Speichern &amp; freigeben</button>
+  <button type="submit" name="release" value="0" class="btn big"><svg class="ic"><use href="#i-bookmark"/></svg>Als Entwurf merken</button>
+  <p class="hint">Freigegebene Wünsche sieht der Drucker sofort. Entwürfe bleiben bei dir, bis du sie freigibst.</p>
+</div>
+{{end}}{{end}}
+
 {{define "layout"}}<!doctype html>
 <html lang="de">
 <head>
@@ -74,7 +95,7 @@
       <details class="menu">
         <summary aria-label="Benutzermenü"><span class="avatar">{{initial .User.DisplayName}}</span></summary>
         <div class="menu-pop">
-          <div class="who"><strong>{{.User.DisplayName}}</strong>{{.User.Email}}</div>
+          <div class="who"><strong>{{.User.DisplayName}}</strong>{{.User.Email}}<span class="role {{if .User.IsPrinter}}editor{{else}}viewer{{end}}" style="margin-top:.35rem;display:inline-block">{{if .User.IsPrinter}}DRUCKER{{else}}WÜNSCHER{{end}}</span></div>
           <a href="/settings"><svg class="ic"><use href="#i-sliders"/></svg>Einstellungen &amp; Lesezeichen</a>
           <a href="/lists"><svg class="ic"><use href="#i-share"/></svg>Listen teilen</a>
           <form method="post" action="/auth/logout"><button type="submit"><svg class="ic"><use href="#i-logout"/></svg>Abmelden</button></form>

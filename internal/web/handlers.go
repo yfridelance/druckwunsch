@@ -23,6 +23,7 @@ func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) {
 		"Next":     r.URL.Query().Get("next"),
 		"DevMode":  s.Auth.DevMode(),
 		"OIDCName": s.OIDCName,
+		"Denied":   r.URL.Query().Get("denied") != "",
 	})
 }
 
@@ -35,6 +36,8 @@ type overviewData struct {
 	Filter    store.Filter
 	Platforms map[string]string
 	Counts    map[string]int
+	Users     []store.User // printers: filter by requester
+	Drafts    int          // own drafts not yet released
 }
 
 func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +45,7 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 	f := store.Filter{Status: q.Get("status"), Platform: q.Get("platform"), Query: q.Get("q"), Sort: q.Get("sort")}
 	f.ListID, _ = strconv.ParseInt(q.Get("list"), 10, 64)
 	f.LabelID, _ = strconv.ParseInt(q.Get("label"), 10, 64)
+	f.RequesterID, _ = strconv.ParseInt(q.Get("by"), 10, 64)
 	if _, set := q["status"]; !set {
 		f.Status = "offen"
 	}
@@ -57,17 +61,40 @@ func (s *Server) overview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	labels, _ := s.Store.Labels(r.Context())
-	counts, _ := s.Store.StatusCounts(r.Context(), u.ID, f.ListID)
-	s.render(w, r, "overview", "Übersicht", overviewData{
+	counts, _ := s.Store.StatusCounts(r.Context(), u.ID, f)
+	d := overviewData{
 		Items: items, Lists: lists, Labels: labels, Filter: f, Platforms: ingest.PlatformNames, Counts: counts,
-	})
+	}
+	if u.IsPrinter() {
+		d.Users, _ = s.Store.Users(r.Context())
+	}
+	if all, err := s.Store.StatusCounts(r.Context(), u.ID, store.Filter{ListID: f.ListID}); err == nil {
+		d.Drafts = all["entwurf"]
+	}
+	s.render(w, r, "overview", "Übersicht", d)
+}
+
+// releaseDrafts hands all drafts (of one list or all lists) to the printer.
+func (s *Server) releaseDrafts(w http.ResponseWriter, r *http.Request) {
+	n, err := s.Store.ReleaseDrafts(r.Context(), me(r).ID, formInt(r, "list"))
+	if err != nil {
+		s.fail(w, r, err)
+		return
+	}
+	back := "/"
+	if l := formInt(r, "list"); l != 0 {
+		back = "/?list=" + strconv.FormatInt(l, 10)
+	}
+	redirect(w, r, back, strconv.Itoa(n)+" freigegeben")
 }
 
 // ---- add by URL / share target ----
 
 type addData struct {
 	URL, Title, Note, RequestedBy string
+	RequesterID                   int64
 	Lists                         []store.List
+	Users                         []store.User // printers: wish on behalf of
 	ListID                        int64
 	Error                         string
 }
@@ -99,6 +126,9 @@ func (s *Server) showAdd(w http.ResponseWriter, r *http.Request, d addData) {
 	if d.ListID == 0 {
 		d.ListID, _ = strconv.ParseInt(r.URL.Query().Get("list"), 10, 64)
 	}
+	if me(r).IsPrinter() {
+		d.Users, _ = s.Store.Users(r.Context())
+	}
 	s.render(w, r, "add", "Hinzufügen", d)
 }
 
@@ -121,7 +151,7 @@ func (s *Server) addSubmit(w http.ResponseWriter, r *http.Request) {
 	u := me(r)
 	d := addData{
 		URL: formStr(r, "url", 2000), Title: formStr(r, "title", 300), Note: formStr(r, "note", 4000),
-		RequestedBy: formStr(r, "requested_by", 200), ListID: formInt(r, "list"),
+		RequestedBy: formStr(r, "requested_by", 200), RequesterID: formInt(r, "requester"), ListID: formInt(r, "list"),
 	}
 	ref, err := ingest.Parse(d.URL)
 	if err != nil {
@@ -151,7 +181,7 @@ func (s *Server) addSubmit(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, r, err)
 		return
 	}
-	itemID, err := s.createItem(r, u.ID, modelID, d.ListID, d.RequestedBy, d.Note, ref.ProfileID)
+	itemID, err := s.createItem(r, u.ID, modelID, d.ListID, d.Note, ref.ProfileID)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -162,7 +192,9 @@ func (s *Server) addSubmit(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/items/"+strconv.FormatInt(itemID, 10), "Hinzugefügt")
 }
 
-func (s *Server) createItem(r *http.Request, userID, modelID, listID int64, requestedBy, note, sourceProfileID string) (int64, error) {
+// createItem reads the shared wish fields (requester, quantity, color,
+// profile, release) from the form.
+func (s *Server) createItem(r *http.Request, userID, modelID, listID int64, note, sourceProfileID string) (int64, error) {
 	if listID == 0 {
 		var err error
 		if listID, err = s.Store.InboxID(r.Context(), userID); err != nil {
@@ -170,7 +202,9 @@ func (s *Server) createItem(r *http.Request, userID, modelID, listID int64, requ
 		}
 	}
 	in := store.ItemInput{
-		ModelID: modelID, ListID: listID, RequestedBy: requestedBy, Note: note,
+		ModelID: modelID, ListID: listID, Note: note,
+		RequesterID: formInt(r, "requester"), RequestedBy: formStr(r, "requested_by", 200),
+		Release:  r.FormValue("release") == "1",
 		Quantity: int(formInt(r, "quantity")), Color: formStr(r, "color", 200),
 	}
 	if pid := formInt(r, "profile"); pid != 0 {
@@ -237,6 +271,7 @@ type ingestData struct {
 	Ref        ingest.Ref
 	Warning    string
 	Lists      []store.List
+	Users      []store.User
 	Existing   []store.Item
 	ExistingID int64
 }
@@ -275,6 +310,9 @@ func (s *Server) ingestConfirm(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	d := ingestData{Token: token, Model: m, Ref: ref, Warning: warn, Lists: lists}
+	if u.IsPrinter() {
+		d.Users, _ = s.Store.Users(r.Context())
+	}
 	if id, err := s.Store.ModelByURL(r.Context(), ref.URL); err == nil {
 		d.ExistingID = id
 		d.Existing, _ = s.Store.ItemsForModel(r.Context(), u.ID, id)
@@ -311,7 +349,7 @@ func (s *Server) ingestSave(w http.ResponseWriter, r *http.Request) {
 	if _, ok := r.PostForm["profile_source"]; ok {
 		sourceProfile = r.PostForm.Get("profile_source")
 	}
-	itemID, err := s.createItem(r, u.ID, modelID, formInt(r, "list"), formStr(r, "requested_by", 200), formStr(r, "note", 4000), sourceProfile)
+	itemID, err := s.createItem(r, u.ID, modelID, formInt(r, "list"), formStr(r, "note", 4000), sourceProfile)
 	if err != nil {
 		s.fail(w, r, err)
 		return
@@ -329,6 +367,7 @@ type itemData struct {
 	Labels   []store.Label
 	Lists    []store.List
 	Others   []store.Item
+	Users    []store.User
 	Origin   string
 }
 
@@ -353,6 +392,9 @@ func (s *Server) itemPage(w http.ResponseWriter, r *http.Request) {
 	d.Comments, _ = s.Store.Comments(r.Context(), it.ID)
 	d.Labels, _ = s.Store.Labels(r.Context())
 	d.Lists, _ = s.editableLists(r.Context(), u.ID)
+	if it.CanSetRequester() {
+		d.Users, _ = s.Store.Users(r.Context())
+	}
 	others, _ := s.Store.ItemsForModel(r.Context(), u.ID, it.ModelID)
 	for _, o := range others {
 		if o.ID != it.ID {
@@ -384,9 +426,12 @@ func (s *Server) itemStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) itemEdit(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	_, setReq := r.PostForm["requester"]
 	err := s.Store.UpdateItem(r.Context(), me(r).ID, idParam(r, "id"), store.ItemUpdate{
-		RequestedBy: formStr(r, "requested_by", 200), Note: formStr(r, "note", 4000),
-		Quantity: int(formInt(r, "quantity")), Color: formStr(r, "color", 200), Priority: int(formInt(r, "priority")),
+		Note: formStr(r, "note", 4000), Quantity: int(formInt(r, "quantity")),
+		Color: formStr(r, "color", 200), Priority: int(formInt(r, "priority")),
+		SetRequester: setReq, RequesterID: formInt(r, "requester"), RequestedBy: formStr(r, "requested_by", 200),
 	})
 	if err != nil {
 		s.fail(w, r, err)
@@ -605,6 +650,10 @@ func (s *Server) settingsPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) labelCreate(w http.ResponseWriter, r *http.Request) {
+	if !me(r).IsPrinter() {
+		s.fail(w, r, store.ErrForbidden)
+		return
+	}
 	name := formStr(r, "name", 50)
 	if name == "" {
 		redirect(w, r, "/settings", "Name fehlt")
@@ -618,6 +667,10 @@ func (s *Server) labelCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) labelDelete(w http.ResponseWriter, r *http.Request) {
+	if !me(r).IsPrinter() {
+		s.fail(w, r, store.ErrForbidden)
+		return
+	}
 	if err := s.Store.DeleteLabel(r.Context(), idParam(r, "id")); err != nil {
 		s.fail(w, r, err)
 		return

@@ -28,6 +28,13 @@ type Config struct {
 	ClientID     string
 	ClientSecret string
 	DevLogin     bool // only for local development without an IdP
+
+	// Roles from the IdP groups claim. Members of PrinterGroup print the
+	// wishes; members of UserGroup may only make wishes. Anyone else is
+	// turned away.
+	GroupsClaim  string
+	PrinterGroup string
+	UserGroup    string
 }
 
 type Auth struct {
@@ -44,6 +51,9 @@ type ctxKey struct{}
 func New(ctx context.Context, cfg Config, st *store.Store) (*Auth, error) {
 	// Accept the discovery URL as well as the plain issuer.
 	cfg.Issuer = strings.TrimSuffix(strings.TrimSuffix(cfg.Issuer, "/.well-known/openid-configuration"), "/")
+	if cfg.GroupsClaim == "" {
+		cfg.GroupsClaim = "groups"
+	}
 	a := &Auth{cfg: cfg, store: st, secure: strings.HasPrefix(cfg.BaseURL, "https://")}
 	if cfg.Issuer == "" {
 		if !cfg.DevLogin {
@@ -71,7 +81,7 @@ func New(ctx context.Context, cfg Config, st *store.Store) (*Auth, error) {
 		ClientSecret: cfg.ClientSecret,
 		Endpoint:     a.provider.Endpoint(),
 		RedirectURL:  strings.TrimSuffix(cfg.BaseURL, "/") + "/auth/callback",
-		Scopes:       []string{oidc.ScopeOpenID, "profile", "email"},
+		Scopes:       []string{oidc.ScopeOpenID, "profile", "email", "groups"},
 	}
 	return a, nil
 }
@@ -128,7 +138,11 @@ func (a *Auth) Start(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "dev_user fehlt", http.StatusBadRequest)
 			return
 		}
-		u, err := a.store.UpsertUser(r.Context(), "dev:"+name, name+"@dev.local", name)
+		role := store.RoleRequester
+		if r.URL.Query().Get("dev_role") == store.RolePrinter {
+			role = store.RolePrinter
+		}
+		u, err := a.store.UpsertUser(r.Context(), "dev:"+name, name+"@dev.local", name, role)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -191,7 +205,25 @@ func (a *Auth) Callback(w http.ResponseWriter, r *http.Request) {
 	if claims.Name == "" {
 		claims.Name = claims.PreferredUsername
 	}
-	u, err := a.store.UpsertUser(r.Context(), idt.Issuer+"|"+idt.Subject, claims.Email, claims.Name)
+	var all map[string]any
+	_ = idt.Claims(&all)
+	groups := stringList(all[a.cfg.GroupsClaim])
+	if len(groups) == 0 {
+		// some IdPs only put groups into the userinfo response
+		if info, err := a.provider.UserInfo(r.Context(), oauth2.StaticTokenSource(tok)); err == nil {
+			var ui map[string]any
+			if info.Claims(&ui) == nil {
+				groups = stringList(ui[a.cfg.GroupsClaim])
+			}
+		}
+	}
+	role := a.roleFor(groups)
+	if role == "" {
+		slog.Warn("Login ohne passende Gruppe abgelehnt", "user", claims.PreferredUsername, "groups", groups)
+		http.Redirect(w, r, "/login?denied=1", http.StatusSeeOther)
+		return
+	}
+	u, err := a.store.UpsertUser(r.Context(), idt.Issuer+"|"+idt.Subject, claims.Email, claims.Name, role)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -218,4 +250,40 @@ func (a *Auth) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", MaxAge: -1})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// roleFor maps the user's groups to a role ("" = no access).
+func (a *Auth) roleFor(groups []string) string {
+	has := func(g string) bool {
+		for _, x := range groups {
+			if g != "" && strings.EqualFold(x, g) {
+				return true
+			}
+		}
+		return false
+	}
+	switch {
+	case has(a.cfg.PrinterGroup):
+		return store.RolePrinter
+	case has(a.cfg.UserGroup):
+		return store.RoleRequester
+	}
+	return ""
+}
+
+// stringList accepts a claim as a JSON array or a single string.
+func stringList(v any) []string {
+	switch t := v.(type) {
+	case string:
+		return []string{t}
+	case []any:
+		out := make([]string, 0, len(t))
+		for _, x := range t {
+			if s, ok := x.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }

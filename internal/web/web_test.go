@@ -77,7 +77,7 @@ func TestEndToEnd(t *testing.T) {
 	if _, _, path := c.get("/"); path != "/login" {
 		t.Fatalf("anonymous not redirected to login: %s", path)
 	}
-	if code, _, path := c.get("/auth/start?dev_user=Anna&next=/settings"); code != 200 || path != "/settings" {
+	if code, _, path := c.get("/auth/start?dev_user=Anna&dev_role=drucker&next=/settings"); code != 200 || path != "/settings" {
 		t.Fatalf("login: %d %s", code, path)
 	}
 
@@ -145,5 +145,61 @@ func TestLoginRedirectIsLocal(t *testing.T) {
 	c, _ := setup(t)
 	if _, _, path := c.get("/auth/start?dev_user=X&next=//evil.example/"); path != "/" {
 		t.Fatalf("open redirect: %s", path)
+	}
+}
+
+func TestRequesterReleaseFlow(t *testing.T) {
+	anna, ts := setup(t)
+	if _, _, path := anna.get("/auth/start?dev_user=Anna&dev_role=wuenscher"); path != "/" {
+		t.Fatalf("login: %s", path)
+	}
+	jar, _ := cookiejar.New(nil)
+	paul := &client{t: t, base: anna.base, c: &http.Client{Jar: jar}}
+	_ = ts
+	paul.get("/auth/start?dev_user=Paul&dev_role=drucker")
+
+	// requesters see draft/release buttons, no requester picker
+	_, body, _ := anna.get("/add")
+	if !strings.Contains(body, "Als Entwurf merken") || strings.Contains(body, `name="requester"`) {
+		t.Fatal("requester add form")
+	}
+	_, body, _ = paul.get("/add")
+	if !strings.Contains(body, `name="requester"`) || !strings.Contains(body, "Paul (ich)") {
+		t.Fatal("printer add form")
+	}
+
+	code, body, itemPath := anna.post("/add", url.Values{"url": {"https://makerworld.com/de/models/88-x"}, "release": {"0"}, "requested_by": {"Fremd"}})
+	if code != 200 || !strings.Contains(body, "An den Drucker freigeben") || !strings.Contains(body, "Anna") {
+		t.Fatalf("draft: %d %s", code, itemPath)
+	}
+	if code, _, _ := paul.get(itemPath); code != http.StatusNotFound {
+		t.Fatalf("printer sees draft: %d", code)
+	}
+	if _, body, _ = anna.get("/"); !strings.Contains(body, "Alle freigeben") {
+		t.Fatal("draft banner missing")
+	}
+	if _, body, _ = anna.post("/release", url.Values{}); !strings.Contains(body, "1 freigegeben") {
+		t.Fatal("release all")
+	}
+	code, body, _ = paul.get(itemPath)
+	if code != 200 || !strings.Contains(body, "Verwerfen") || !strings.Contains(body, `name="requester"`) {
+		t.Fatalf("printer view: %d", code)
+	}
+	if code, _, _ := anna.post(itemPath+"/status", url.Values{"status": {"gedruckt"}}); code != http.StatusForbidden {
+		t.Fatalf("requester printed: %d", code)
+	}
+	if code, _, _ := paul.post(itemPath+"/status", url.Values{"status": {"in_druck"}}); code != 200 {
+		t.Fatalf("printer status: %d", code)
+	}
+	if _, body, _ = anna.get(itemPath); strings.Contains(body, "Zurückziehen") || !strings.Contains(body, "Der Drucker ist dran") {
+		t.Fatal("requester view while printing")
+	}
+
+	// label management is for printers
+	if code, _, _ := anna.post("/labels", url.Values{"name": {"X"}}); code != http.StatusForbidden {
+		t.Fatalf("requester created label: %d", code)
+	}
+	if _, body, _ = anna.get("/settings"); strings.Contains(body, `action="/labels"`) {
+		t.Fatal("label form shown to requester")
 	}
 }

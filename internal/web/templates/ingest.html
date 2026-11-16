@@ -18,7 +18,7 @@
   {{if .Existing}}
   <div class="notice"><svg class="ic"><use href="#i-alert"/></svg><div>
     <p><strong>Schon erfasst:</strong></p>
-    <ul>{{range .Existing}}<li><a href="/items/{{.ID}}">{{.ListName}}</a> · {{.StatusLabel}}{{if .RequestedBy}} · für {{.RequestedBy}}{{end}}</li>{{end}}</ul>
+    <ul>{{range .Existing}}<li><a href="/items/{{.ID}}">{{.ListName}}</a> · {{.StatusLabel}}{{if .RequestedBy}} · von {{.RequestedBy}}{{end}}</li>{{end}}</ul>
     <form method="post" action="/ingest/{{.Token}}">
       <input type="hidden" name="mode" value="update">
       <input type="hidden" name="item" value="{{(index .Existing 0).ID}}">
@@ -32,8 +32,8 @@
       <label>Liste
         <select name="list">{{range .Lists}}<option value="{{.ID}}">{{.Name}}{{if ne .Role "owner"}} · {{.OwnerName}}{{end}}</option>{{end}}</select>
       </label>
-      <label>Wunsch von <input name="requested_by" placeholder="z.B. Anna"></label>
     </div>
+    {{if .Users}}{{template "requester" (dict "Users" .Users "ID" $.User.ID "Name" "" "Me" $.User.ID)}}{{end}}
     <div class="row">
       <label>Anzahl <input type="number" name="quantity" min="1" value="1"></label>
       <label>Farbe / Material <input name="color"></label>
@@ -47,7 +47,7 @@
     </label>
     {{end}}
     <label>Notiz <textarea name="note" rows="3"></textarea></label>
-    <button type="submit" class="btn primary big" style="width:100%"><svg class="ic"><use href="#i-plus"/></svg>{{if .Existing}}Zusätzlich hinzufügen{{else}}Ab in die Warteschlange{{end}}</button>
+    {{template "submit-wish" $.User.IsPrinter}}
   </form>
 </div>
 {{end}}{{end}}

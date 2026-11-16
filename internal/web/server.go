@@ -79,6 +79,7 @@ func (s *Server) Handler() (http.Handler, error) {
 	r.Group(func(r chi.Router) {
 		r.Use(s.Auth.Require, s.sameOrigin)
 		r.Get("/", s.overview)
+		r.Post("/release", s.releaseDrafts)
 		r.Get("/add", s.addForm)
 		r.Post("/add", s.addSubmit)
 		r.Get("/share", s.shareTarget)
@@ -229,12 +230,35 @@ var funcs = template.FuncMap{
 		}
 		return "?"
 	},
-	"workflow": func() []store.Status { return store.Statuses[:4] },
+	"workflow": func() []store.Status { return store.Workflow },
+	"add":      func(a, b int) int { return a + b },
+	"deref": func(p any) int64 {
+		switch t := p.(type) {
+		case *int64:
+			if t != nil {
+				return *t
+			}
+		case int64:
+			return t
+		case int:
+			return int64(t)
+		}
+		return 0
+	},
+	"dict": func(kv ...any) map[string]any {
+		m := map[string]any{}
+		for i := 0; i+1 < len(kv); i += 2 {
+			if k, ok := kv[i].(string); ok {
+				m[k] = kv[i+1]
+			}
+		}
+		return m
+	},
 }
 
 // statusStep maps a status to its position in the workflow (-1 = discarded).
 func statusStep(status string) int {
-	for i, s := range store.Statuses[:4] {
+	for i, s := range store.Workflow {
 		if s.Key == status {
 			return i
 		}
