@@ -102,7 +102,7 @@ func TestEndToEnd(t *testing.T) {
 
 	// bookmarklet payload enriches the model
 	payload := `{"url":"https://makerworld.com/de/models/77-x#profileId-5","og":{"title":"OG"},"design":
-		{"id":77,"title":"Halter","instances":[{"id":1,"profileId":5,"title":"PLA 0.2","prediction":3600}]}}`
+		{"id":77,"title":"Halter","instances":[{"id":5,"profileId":990001,"title":"PLA 0.2","prediction":3600}]}}`
 	code, body, _ = c.do(http.MethodPost, "/ingest", "application/json", payload)
 	if code != 200 || !strings.Contains(body, `"next":"/ingest/`) {
 		t.Fatalf("ingest receive: %d %s", code, body)

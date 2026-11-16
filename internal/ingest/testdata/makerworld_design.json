@@ -1,0 +1,196 @@
+{
+ "id": 3292116,
+ "title": "Smarter Rollladenmotor | ESP32 + Home Assistant",
+ "titleTranslated": "Smarter Rollladenmotor | ESP32 + Home Assistant",
+ "slug": "smart-roller-blind-motor-esp32-home-assistant",
+ "coverUrl": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/design/6b332c7c11fe0631.jpg",
+ "summary": "<h2>🪟 Smart Roller Blind Motor — ESP32 + Home Assistant</h2><p>&nbsp;</p><p>A DIY motor unit that automates a standard chain-driven roller blind and<br>talks natively to Home Assistant via ESPHome. No cloud, no subscription,<br>nothing to sign into.</p><p>&nbsp;</p><p>Built this after burning through three ESP boards getting it right. All<br>four of my blinds now move on their own and follow the s",
+ "summaryTranslated": "<h2>🪟 Smarter Rolladenmotor — ESP32 + Home Assistant</h2><p>&nbsp;</p><p>Eine DIY-Motoreinheit, die ein Standard-Kettenrollladen automatisiert und<br>nativ über ESPHome mit Home Assistant kommuniziert. Keine Cloud, kein Abonnement,<br>nichts zum Anmelden</p><p>&nbsp;</p><p>Ich habe dies gebaut, nachdem ich drei ESP-Boards verbraucht hatte, um es richtig hinzubekommen. Alle<br>vier meiner Jalousien",
+ "license": "Standard Digital File License",
+ "designCreator": {
+  "uid": 1628581563,
+  "name": "Printy.Po",
+  "handle": "printy.po",
+  "avatar": "https://public-cdn.bblmw.com/avatar/1628581563/2025-08-12_7f83e50fc861c8.png"
+ },
+ "designExtension": {
+  "design_pictures": [
+   {
+    "name": "cover",
+    "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/design/6b332c7c11fe0631.jpg",
+    "isRealLifePhoto": 0,
+    "isCompression": 0,
+    "size": 0
+   },
+   {
+    "name": "lll.jpg",
+    "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/design/b537eeb082951a7d.jpg",
+    "isRealLifePhoto": 0,
+    "isCompression": 0,
+    "size": 0
+   },
+   {
+    "name": "app1.jpg",
+    "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/design/491e336e7b5cc465.jpg",
+    "isRealLifePhoto": 0,
+    "isCompression": 0,
+    "size": 0
+   },
+   {
+    "name": "app3.png",
+    "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/design/0bd5ad2edc58bbc3.png",
+    "isRealLifePhoto": 0,
+    "isCompression": 0,
+    "size": 0
+   },
+   {
+    "name": "app2.jpg",
+    "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/design/940b77b8abc80860.jpg",
+    "isRealLifePhoto": 0,
+    "isCompression": 0,
+    "size": 0
+   }
+  ]
+ },
+ "defaultInstanceId": 3735590,
+ "modelId": "USe7a09f8e47d339",
+ "instances": [
+  {
+   "id": 3735590,
+   "profileId": 992766807,
+   "title": "0.2mm Schicht, 3 Wände, 10% Füllung",
+   "titleTranslated": "0.2mm Schicht, 3 Wände, 10% Füllung",
+   "cover": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/992766807/instance/6b332c7c11fe0631.jpg",
+   "prediction": 9616,
+   "weight": 86,
+   "instanceFilaments": [
+    {
+     "type": "PETG",
+     "color": "#FCE300",
+     "usedM": "2.39",
+     "usedG": "8"
+    },
+    {
+     "type": "PETG",
+     "color": "#FFFFFF",
+     "usedM": "25.67",
+     "usedG": "78"
+    }
+   ],
+   "pictures": [
+    {
+     "name": "6b332c7c11fe0631.jpg",
+     "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/992766807/instance/6b332c7c11fe0631.jpg",
+     "isRealLifePhoto": 0,
+     "isCompression": 0
+    }
+   ],
+   "extention": {
+    "modelInfo": {
+     "compatibility": {
+      "devModelName": "C12",
+      "devProductName": "P1S",
+      "nozzleDiameter": 0.4
+     },
+     "otherCompatibility": [
+      {
+       "devModelName": "O1D",
+       "devProductName": "H2D",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "N1",
+       "devProductName": "A1 mini",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "O1C2",
+       "devProductName": "H2C",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "O1E",
+       "devProductName": "H2D Pro",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "N6",
+       "devProductName": "X2D",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "BL-P002",
+       "devProductName": "X1",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "N9",
+       "devProductName": "A2L",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "C13",
+       "devProductName": "X1E",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "N2S",
+       "devProductName": "A1",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "BL-P001",
+       "devProductName": "X1 Carbon",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "C11",
+       "devProductName": "P1P",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "O1S",
+       "devProductName": "H2S",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "N7",
+       "devProductName": "P2S",
+       "nozzleDiameter": 0.4
+      },
+      {
+       "devModelName": "N10",
+       "devProductName": "H3C",
+       "nozzleDiameter": 0.4
+      }
+     ],
+     "plates": [
+      {
+       "index": 1,
+       "name": "",
+       "thumbnail": {
+        "name": "plate_1.png",
+        "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/992766807/instance/plate_1.png"
+       },
+       "prediction": 1646,
+       "weight": 8
+      },
+      {
+       "index": 2,
+       "name": "",
+       "thumbnail": {
+        "name": "plate_2.png",
+        "url": "https://makerworld.bblmw.com/makerworld/model/USe7a09f8e47d339/992766807/instance/plate_2.png"
+       },
+       "prediction": 7970,
+       "weight": 78
+      }
+     ]
+    }
+   },
+   "isDefault": false,
+   "needAms": false,
+   "materialCnt": 2
+  }
+ ]
+}

@@ -135,7 +135,7 @@ func ParseMakerWorld(data []byte) (store.Model, error) {
 
 func parseInstance(im map[string]any) store.Profile {
 	p := store.Profile{
-		SourceProfileID: firstStr(im, "profileId", "id"),
+		SourceProfileID: firstStr(im, "id", "instanceId", "profileId"), // #profileId-<n> in MakerWorld URLs is the instance id
 		Name:            firstStr(im, "titleTranslated", "title", "name"),
 		CoverImage:      safeImage(firstStr(im, "cover", "coverUrl")),
 		PrintTimeSec:    int64(firstNum(im, "prediction", "printTime", "estimatedTime")),

@@ -2,6 +2,8 @@ package ingest
 
 import (
 	"encoding/json"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -64,12 +66,12 @@ const mwDesign = `{"props":{"pageProps":{"design":{
   "designCreator": {"name": "Maker Max", "handle": "maxmakes"},
   "designExtension": {"design_pictures": [{"url": "https://makerworld.bblmw.com/a.jpg"}, {"url": "https://makerworld.bblmw.com/makerworld/model/cover.jpg"}]},
   "instances": [
-    {"id": 11, "profileId": 987654, "title": "0.2mm PLA", "cover": "https://makerworld.bblmw.com/p1.jpg",
+    {"id": 987654, "profileId": 992766807, "title": "0.2mm PLA", "cover": "https://makerworld.bblmw.com/p1.jpg",
      "prediction": 5400, "weight": 12.34,
      "instanceFilaments": [{"type": "PLA", "color": "#FF0000", "usedG": 10.0}, {"type": "PLA", "color": "#FFFFFF", "usedG": 2.3}],
      "extention": {"modelInfo": {"compatibility": {"devProductName": "X1 Carbon", "nozzleDiameter": 0.4},
         "otherCompatibility": [{"devProductName": "P1S"}], "plates": [{}, {}]}}},
-    {"id": 12, "title": "Ohne Profil-ID", "prediction": "60"}
+    {"instanceId": 12, "title": "Andere ID", "prediction": "60"}
   ]}}}}`
 
 func TestParseMakerWorld(t *testing.T) {
@@ -123,5 +125,58 @@ func TestFromPayloadOGFallback(t *testing.T) {
 	}
 	if _, _, err := FromPayload(Payload{URL: "https://makerworld.com/models/5"}); err == nil {
 		t.Fatal("expected error without metadata")
+	}
+}
+
+// testdata/makerworld_design.json is a trimmed design object from a real,
+// browser-saved MakerWorld page (__NEXT_DATA__ props.pageProps.design).
+func TestParseMakerWorldRealPage(t *testing.T) {
+	design, err := os.ReadFile("testdata/makerworld_design.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, ref, err := FromPayload(Payload{
+		URL:    "https://makerworld.com/de/models/3292116-smart-roller-blind-motor-esp32-home-assistant#profileId-3735590",
+		Design: design,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Title != "Smarter Rollladenmotor | ESP32 + Home Assistant" || m.Designer != "Printy.Po" ||
+		m.DesignerURL != "https://makerworld.com/@printy.po" || m.License != "Standard Digital File License" {
+		t.Errorf("design: %q %q %q %q", m.Title, m.Designer, m.DesignerURL, m.License)
+	}
+	if m.SourceID != "3292116" || m.URL != "https://makerworld.com/models/3292116" || ref.ProfileID != "3735590" {
+		t.Errorf("ids: %s %s %s", m.SourceID, m.URL, ref.ProfileID)
+	}
+	if !strings.HasPrefix(m.Description, "🪟 Smarter Rolladenmotor") || strings.Contains(m.Description, "<") {
+		t.Errorf("description: %q", m.Description)
+	}
+	if !strings.HasPrefix(m.CoverImage, "https://makerworld.bblmw.com/") || len(m.Images) < 2 {
+		t.Errorf("images: %q %v", m.CoverImage, m.Images)
+	}
+	if len(m.Profiles) != 1 {
+		t.Fatalf("profiles: %d", len(m.Profiles))
+	}
+	p := m.Profiles[0]
+	if p.SourceProfileID != ref.ProfileID {
+		t.Errorf("profile id %s must match the URL fragment %s", p.SourceProfileID, ref.ProfileID)
+	}
+	if p.Name != "0.2mm Schicht, 3 Wände, 10% Füllung" || p.PrintTimeSec != 9616 || p.FilamentG != 86 ||
+		p.PlateCount != 2 || p.Nozzle != "0.4 mm" || !strings.HasPrefix(p.Printer, "P1S (auch: H2D") {
+		t.Errorf("profile: %+v", p)
+	}
+	if len(p.Materials) != 2 || p.Materials[0].Type != "PETG" || p.Materials[0].Color != "#FCE300" ||
+		p.Materials[0].Grams != 8 || p.Materials[1].Grams != 78 {
+		t.Errorf("materials (usedG is a string on MakerWorld): %+v", p.Materials)
+	}
+	if p.URL != "https://makerworld.com/models/3292116#profileId-3735590" {
+		t.Errorf("profile url: %s", p.URL)
+	}
+
+	// Wrapped in the full __NEXT_DATA__ shape it must be found as well.
+	wrapped := []byte(`{"props":{"pageProps":{"design":` + string(design) + `}}}`)
+	if m2, err := ParseMakerWorld(wrapped); err != nil || m2.Title != m.Title || len(m2.Profiles) != 1 {
+		t.Errorf("wrapped: %v %+v", err, m2.Title)
 	}
 }
