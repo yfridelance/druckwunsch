@@ -26,6 +26,9 @@ func env(key, def string) string {
 	return def
 }
 
+// version is set at build time (-ldflags "-X main.version=...").
+var version = "dev"
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stdout, nil)))
 	if err := run(); err != nil {
@@ -101,7 +104,7 @@ func run() error {
 		defer cancel()
 		hs.Shutdown(sctx)
 	}()
-	slog.Info("Druckwunsch läuft", "listen", listen, "base_url", baseURL)
+	slog.Info("Druckwunsch läuft", "version", version, "listen", listen, "base_url", baseURL)
 	if err := hs.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}

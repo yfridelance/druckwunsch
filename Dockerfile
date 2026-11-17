@@ -1,9 +1,13 @@
-FROM golang:1.26-alpine AS build
+# Go cross-compiles natively on the build host; only the small runtime
+# stage runs under emulation for foreign platforms.
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS build
+ARG TARGETOS TARGETARCH VERSION=dev
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/druckwunsch ./cmd/druckwunsch
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o /out/druckwunsch ./cmd/druckwunsch
 
 FROM alpine:3.22
 RUN apk add --no-cache ca-certificates tzdata && adduser -D -u 1000 app && mkdir /data && chown app /data

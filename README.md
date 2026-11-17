@@ -29,6 +29,24 @@ docker run --rm -u 1000:1000 -e HOME=/tmp -v ~/.cache/dw-gomod:/go -v $PWD:/src 
 docker build --network host -t druckwunsch:latest .
 ```
 
+## Branches & Images
+
+Gearbeitet wird in `feature/<name>`-Branches, die per Pull Request nach `develop` gehen; `develop` wird per Pull Request nach `main` übernommen. Jeder Push baut über GitHub Actions ein Image (`linux/amd64`, `linux/arm64`) nach `ghcr.io/yfridelance/druckwunsch`:
+
+| Push auf | Kanal | Image-Tags |
+|---|---|---|
+| `feature/<name>` | alpha | `alpha-<name>`, `alpha-<name>-<sha>` |
+| `develop` | preprod | `preprod`, `preprod-<sha>` |
+| `main` | prod | `prod`, `latest`, `prod-<sha>` |
+| Tag `v1.2.3` | Release | `1.2.3`, `1.2` |
+
+Pull Requests laufen nur durch die Tests (gofmt, vet, test). Die Version steht beim Start im Log.
+
+```
+git switch develop && git switch -c feature/mein-thema
+# … committen, pushen → alpha-Image; dann PR nach develop
+```
+
 ## Rollen
 
 - **Drucker** (`DW_GROUP_PRINTER`): sieht alle freigegebenen Wünsche, führt sie durch den Status (Neu → Zu drucken → In Druck → Gedruckt), verwaltet Labels und kann Wünsche im Namen anderer erfassen (User oder Freitext-Name).
