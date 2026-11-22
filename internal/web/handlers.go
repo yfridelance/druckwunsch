@@ -160,20 +160,26 @@ func (s *Server) addSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	model := store.Model{Platform: ref.Platform, SourceID: ref.SourceID, URL: ref.URL, Title: d.Title}
-	// MakerWorld blocks server-side fetches, so only try other platforms.
-	if ref.Platform != "makerworld" {
-		if _, err := s.Store.ModelByURL(r.Context(), ref.URL); errors.Is(err, store.ErrNotFound) {
-			ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
-			og, err := ingest.FetchOpenGraph(ctx, s.Fetcher, ref.URL)
-			cancel()
-			if err == nil {
-				model = ingest.ModelFromOpenGraph(ref, og)
-				if d.Title != "" {
-					model.Title = d.Title
-				}
-			} else {
-				slog.Info("OpenGraph nicht verfügbar", "url", ref.URL, "err", err)
+	// Fetch metadata for new models and for known ones still without metadata
+	// (MakerWorld through its API, others through OpenGraph).
+	needFetch := false
+	if knownID, err := s.Store.ModelByURL(r.Context(), ref.URL); errors.Is(err, store.ErrNotFound) {
+		needFetch = true
+	} else if err == nil {
+		known, err := s.Store.Model(r.Context(), knownID)
+		needFetch = err == nil && !known.HasMetadata()
+	}
+	if needFetch {
+		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+		fetched, err := ingest.FetchModel(ctx, s.Fetcher, ref)
+		cancel()
+		if err == nil {
+			model = fetched
+			if d.Title != "" {
+				model.Title = d.Title
 			}
+		} else {
+			slog.Info("Metadaten nicht verfügbar", "url", ref.URL, "err", err)
 		}
 	}
 	modelID, err := s.Store.UpsertModel(r.Context(), model)
@@ -517,7 +523,8 @@ func (s *Server) itemDelete(w http.ResponseWriter, r *http.Request) {
 	redirect(w, r, "/", "Gelöscht")
 }
 
-// itemRefresh retries the OpenGraph fetch for non-MakerWorld models.
+// itemRefresh fetches the model metadata again (MakerWorld through its API,
+// other platforms through OpenGraph).
 func (s *Server) itemRefresh(w http.ResponseWriter, r *http.Request) {
 	it, err := s.Store.Item(r.Context(), me(r).ID, idParam(r, "id"))
 	if err != nil {
@@ -525,18 +532,22 @@ func (s *Server) itemRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ref, err := ingest.Parse(it.URL)
-	if err != nil || ref.Platform == "makerworld" {
-		redirect(w, r, s.itemURL(r), "Bitte das Lesezeichen auf der Modellseite verwenden")
+	if err != nil {
+		redirect(w, r, s.itemURL(r), "Ungültige URL")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 	defer cancel()
-	og, err := ingest.FetchOpenGraph(ctx, s.Fetcher, ref.URL)
+	model, err := ingest.FetchModel(ctx, s.Fetcher, ref)
 	if err != nil {
-		redirect(w, r, s.itemURL(r), "Abruf fehlgeschlagen: "+err.Error())
+		msg := "Abruf fehlgeschlagen: " + err.Error()
+		if ref.Platform == "makerworld" {
+			msg += " – bitte das Lesezeichen auf der Modellseite verwenden"
+		}
+		redirect(w, r, s.itemURL(r), msg)
 		return
 	}
-	id, err := s.Store.UpsertModel(r.Context(), ingest.ModelFromOpenGraph(ref, og))
+	id, err := s.Store.UpsertModel(r.Context(), model)
 	if err != nil {
 		s.fail(w, r, err)
 		return
