@@ -321,8 +321,14 @@ form.inline { display: inline; }
 .step-alt .btn.cur { --c: var(--st-verworfen); border-color: var(--st-verworfen); }
 
 .label-picker { display: flex; flex-wrap: wrap; gap: .1rem; align-items: center; }
-.label-picker .label { cursor: pointer; padding: .25rem .6rem; }
-.label-picker .label:has(input:checked) { background: color-mix(in srgb, var(--c) 35%, transparent); box-shadow: 0 0 12px -4px var(--c); }
+/* not assigned: grey and dashed with "+"; assigned: full colour with check mark */
+.label-picker .label { cursor: pointer; padding: .25rem .6rem; color: var(--dim); background: transparent;
+  border-style: dashed; border-color: var(--line); opacity: .75; }
+.label-picker .label::before { content: "+"; width: auto; height: auto; background: none; font-weight: 600; }
+.label-picker .label:hover { opacity: 1; border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+.label-picker .label:has(input:checked) { opacity: 1; border-style: solid; color: color-mix(in srgb, var(--c) 70%, #fff);
+  border-color: color-mix(in srgb, var(--c) 60%, transparent); background: color-mix(in srgb, var(--c) 35%, transparent); box-shadow: 0 0 12px -4px var(--c); }
+.label-picker .label:has(input:checked)::before { content: "✓"; color: var(--c); }
 .label-picker .label input { display: none; }
 
 .item-grid { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 1.25rem; margin-top: 1.25rem; align-items: start; }

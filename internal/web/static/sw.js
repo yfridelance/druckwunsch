@@ -1,7 +1,7 @@
 // Minimal service worker: makes the app installable (share target) and
 // keeps static assets available. Pages always come from the network.
-const CACHE = "dw-static-v2";
-const ASSETS = ["/static/app.css", "/static/app.js", "/static/icon.svg"];
+const CACHE = "dw-static-v3";
+const ASSETS = ["/static/app.css?v=3", "/static/app.js?v=3", "/static/icon.svg"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
