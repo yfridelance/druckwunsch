@@ -53,6 +53,7 @@ func (s *Server) Handler() (http.Handler, error) {
 
 	r := chi.NewRouter()
 	r.Use(middleware.RealIP, middleware.Recoverer, securityHeaders, s.Auth.Middleware)
+	r.MethodNotAllowed(methodNotAllowed)
 
 	static, _ := fs.Sub(staticFS, "static")
 	r.Handle("/static/*", http.StripPrefix("/static/", cacheFor(http.FileServer(http.FS(static)), 24*time.Hour)))
@@ -110,6 +111,40 @@ func (s *Server) Handler() (http.Handler, error) {
 		r.Post("/labels/{id}/delete", s.labelDelete)
 	})
 	return r, nil
+}
+
+// methodNotAllowed sends a GET on a POST-only address back to the page the
+// form came from. This happens when the BunkerWeb antibot challenge
+// interrupts a form submission: after the challenge it redirects with GET,
+// and the form data is lost. A 405 would also count as bad behaviour.
+func methodNotAllowed(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
+		return
+	}
+	redirect(w, r, formOrigin(r.URL.Path), "Sitzung wurde erneuert – bitte nochmals absenden")
+}
+
+// formOrigin maps a form action to the page that shows the form.
+func formOrigin(path string) string {
+	seg := strings.Split(strings.Trim(path, "/"), "/")
+	isID := func(s string) bool { return s != "" && strings.Trim(s, "0123456789") == "" }
+	switch seg[0] {
+	case "labels":
+		return "/settings"
+	case "items", "lists":
+		if len(seg) >= 2 && isID(seg[1]) {
+			return "/" + seg[0] + "/" + seg[1]
+		}
+		if seg[0] == "lists" {
+			return "/lists"
+		}
+	case "ingest":
+		if len(seg) == 2 {
+			return "/ingest/" + url.PathEscape(seg[1])
+		}
+	}
+	return "/"
 }
 
 // ---- middleware ----

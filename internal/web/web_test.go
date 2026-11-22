@@ -47,6 +47,10 @@ func (c *client) post(path string, form url.Values) (int, string, string) {
 
 func setup(t *testing.T) (*client, *httptest.Server) {
 	dir := t.TempDir()
+	// no live MakerWorld calls in tests (SafeClient refuses loopback)
+	oldAPI := ingest.MakerWorldAPI
+	ingest.MakerWorldAPI = "http://127.0.0.1:1/"
+	t.Cleanup(func() { ingest.MakerWorldAPI = oldAPI })
 	st, err := store.Open(filepath.Join(dir, "t.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -201,5 +205,31 @@ func TestRequesterReleaseFlow(t *testing.T) {
 	}
 	if _, body, _ = anna.get("/settings"); strings.Contains(body, `action="/labels"`) {
 		t.Fatal("label form shown to requester")
+	}
+}
+
+// After the antibot challenge BunkerWeb repeats a form POST as GET; that must
+// lead back to the form instead of a 405.
+func TestGetOnPostOnlyRoute(t *testing.T) {
+	c, _ := setup(t)
+	c.get("/auth/start?dev_user=Anna&dev_role=drucker&next=/settings")
+	c.c.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	for in, want := range map[string]string{
+		"/labels": "/settings", "/labels/3/delete": "/settings", "/items/9/labels": "/items/9",
+		"/lists/2/share": "/lists/2", "/release": "/", "/auth/logout": "/",
+	} {
+		resp, err := c.c.Get(c.base + in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		loc := resp.Header.Get("Location")
+		if resp.StatusCode != http.StatusSeeOther || !strings.HasPrefix(loc, want+"?msg=") {
+			t.Errorf("%s: %d %s", in, resp.StatusCode, loc)
+		}
+	}
+	req, _ := http.NewRequest(http.MethodDelete, c.base+"/labels", nil)
+	if resp, err := c.c.Do(req); err != nil || resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("DELETE: %v %v", err, resp)
 	}
 }
