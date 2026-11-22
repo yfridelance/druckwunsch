@@ -69,6 +69,7 @@
         {{range .Labels}}<label class="label" style="--c: {{safeColor .Color}}"><input type="checkbox" name="label" value="{{.ID}}" {{if hasLabel .ID $it.Labels}}checked{{end}}>{{.Name}}</label>{{end}}
         <noscript><button class="btn sm">Speichern</button></noscript>
       </form>
+      <p><small class="muted">Antippen, um ein Label diesem Wunsch zuzuweisen oder wieder zu entfernen.</small></p>
       {{else}}<p><small>Noch keine Labels. In den <a href="/settings#labels">Einstellungen</a> anlegen.</small></p>{{end}}
     {{else}}<div>{{range $it.Labels}}<span class="label" style="--c: {{safeColor .Color}}">{{.Name}}</span>{{else}}<small>keine</small>{{end}}</div>{{end}}
   </div>
