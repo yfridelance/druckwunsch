@@ -35,7 +35,7 @@
     <div class="notice"><svg class="ic"><use href="#i-alert"/></svg><div>
       <p><strong>Noch keine Bilder &amp; Profile.</strong> Öffne die <a href="{{$m.URL}}" target="_blank" rel="noopener">Modellseite</a> und klick dort das Lesezeichen <a href="/settings">„→ Druckwunsch“</a>.</p>
       <div class="inline-form">
-        {{if ne $m.Platform "makerworld"}}<form method="post" action="/items/{{$it.ID}}/refresh" class="inline"><button class="btn sm"><svg class="ic"><use href="#i-refresh"/></svg>Automatisch versuchen</button></form>{{end}}
+        <form method="post" action="/items/{{$it.ID}}/refresh" class="inline"><button class="btn sm"><svg class="ic"><use href="#i-refresh"/></svg>Automatisch versuchen</button></form>
         {{if $it.CanEdit}}<form method="post" action="/items/{{$it.ID}}/title" class="inline-form" style="flex:1"><input name="title" placeholder="Titel von Hand setzen"><button class="btn sm">Speichern</button></form>{{end}}
       </div>
     </div></div>
